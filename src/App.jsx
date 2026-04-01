@@ -1,0 +1,2533 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── Storage ──────────────────────────────────────────────────────────────────
+const STORAGE_KEYS = { customers: "nova_customers_v3", settings: "nova_settings_v3", expenses: "nova_expenses_v3" };
+async function loadData(key) { try { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; } catch { return null; } }
+async function saveData(key, value) { try { await window.storage.set(key, JSON.stringify(value)); } catch {} }
+
+// ─── Defaults ─────────────────────────────────────────────────────────────────
+const DEFAULT_SETTINGS = { price13: 150, price16: 180, dotPrice: 0.07, paperPrice: 30 };
+const DEFAULT_EXPENSE_CATEGORIES = ["Material Purchase","Electricity","Machine Maintenance","Rent","Transport","Staff Salary","Miscellaneous"];
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+const todayStr = () => new Date().toISOString().split("T")[0];
+const fmtDate = iso => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmtMonth = iso => { const d = new Date(iso + "-01"); return d.toLocaleDateString("en-IN", { month: "short", year: "numeric" }); };
+const uid = () => Math.random().toString(36).slice(2) + Date.now();
+const inr = n => "₹" + (n || 0).toLocaleString("en-IN");
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+const thisYear  = () => new Date().getFullYear().toString();
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+const Icon = ({ name, size = 16 }) => {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" };
+  const p25 = { ...p, strokeWidth: "2.5" };
+  const icons = {
+    plus:     <svg {...p25}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    users:    <svg {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    settings: <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+    back:     <svg {...p25}><polyline points="15 18 9 12 15 6"/></svg>,
+    trash:    <svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>,
+    x:        <svg {...p25}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    save:     <svg {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+    edit:     <svg {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+    laser:    <svg {...p}><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>,
+    cnc:      <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
+    payment:  <svg {...p}><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+    chart:    <svg {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>,
+    trophy:   <svg {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>,
+    lock:     <svg {...p}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+    download: <svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+    upload:   <svg {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+    shield:   <svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+    file:     <svg {...p}><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>,
+    check:    <svg {...p25}><polyline points="20 6 9 17 4 12"/></svg>,
+    receipt:  <svg {...p}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="16" y1="8" x2="8" y2="8"/><line x1="16" y1="12" x2="8" y2="12"/><line x1="12" y1="16" x2="8" y2="16"/></svg>,
+    print:    <svg {...p}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+    expense:  <svg {...p}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>,
+    wallet:   <svg {...p}><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/></svg>,
+    trend:    <svg {...p}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+    filter:   <svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+    tag:      <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+    custom:   <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+    table:    <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>,
+    home:     <svg {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    sun:      <svg {...p}><circle cx="12" cy="12" r="5"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="17.66" y2="6.34"/><line x1="6.34" y1="17.66" x2="4.93" y2="19.07"/></svg>,
+    moon:     <svg {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  };
+  return icons[name] || null;
+};
+
+// ─── CSS ──────────────────────────────────────────────────────────────────────
+const style = `
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#0f0f0f; --surface:#171717; --surface2:#1f1f1f; --surface3:#272727;
+    --border:#2e2e2e; --border2:#3a3a3a;
+    --text:#e8e8e8; --text2:#9a9a9a; --text3:#5a5a5a;
+    --accent:#f0a500; --accent2:#f0c040; --accent-dim:rgba(240,165,0,0.12);
+    --red:#e05050; --green:#50c080; --blue:#5090e0; --purple:#a060e0;
+    --radius:8px; --radius2:12px;
+    --bottom-nav-h:64px;
+    --dash-h:72px;
+  }
+  [data-theme="day"] {
+    --bg:#f4f3ef; --surface:#ffffff; --surface2:#eeebe6; --surface3:#e5e1db;
+    --border:#d8d4ce; --border2:#c6c2bc;
+    --text:#1c1c1c; --text2:#636360; --text3:#9e9b97;
+    --accent:#c97b00; --accent2:#b36c00; --accent-dim:rgba(201,123,0,0.10);
+    --red:#c83a3a; --green:#24935f; --blue:#2672c4; --purple:#7b3fc0;
+  }
+  html { -webkit-text-size-adjust:100%; }
+  body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; -webkit-tap-highlight-color:transparent; }
+  .app { min-height:100vh; display:flex; flex-direction:column; }
+
+  /* ── DASHBOARD BAR ── */
+  .dash-bar {
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    padding:0 24px;
+    height:var(--dash-h);
+    display:flex;
+    align-items:center;
+    gap:0;
+    overflow-x:auto;
+    scrollbar-width:none;
+    flex-shrink:0;
+  }
+  .dash-bar::-webkit-scrollbar { display:none; }
+  .dash-item {
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:0 20px;
+    border-right:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .dash-item:first-child { padding-left:0; }
+  .dash-item:last-child { border-right:none; }
+  .dash-label { font-size:10px; color:var(--text3); font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
+  .dash-value { font-size:18px; font-weight:700; font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
+
+  /* ── HEADER ── */
+  .header { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; height:54px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:200; }
+  .header-logo { display:flex; align-items:center; gap:10px; }
+  .header-nav { display:flex; gap:4px; }
+  .theme-toggle { display:flex; align-items:center; gap:7px; padding:6px 13px; border-radius:50px; border:1px solid var(--border2); background:var(--surface2); color:var(--text2); font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:all .2s; flex-shrink:0; margin-left:8px; letter-spacing:.02em; }
+  .theme-toggle:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+  [data-theme="day"] .theme-toggle { border-color:var(--border2); }
+  [data-theme="day"] .theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
+  .nav-btn { display:flex; align-items:center; gap:6px; padding:7px 14px; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--text2); font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .nav-btn:hover { color:var(--text); background:var(--surface2); border-color:var(--border); }
+  .nav-btn.active { color:var(--accent); background:var(--accent-dim); border-color:var(--accent); }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav { display:none; }
+
+  /* ── MAIN ── */
+  .main { flex:1; padding:24px 24px 40px; max-width:1000px; margin:0 auto; width:100%; transition: max-width 0.25s ease, padding 0.25s ease; }
+  .main.main-full { max-width:1500px; padding-left:32px; padding-right:32px; width: 100%; }
+  .page-title { font-size:22px; font-weight:700; color:var(--text); }
+  .page-sub { font-size:13px; color:var(--text3); margin-top:4px; font-family:'IBM Plex Mono',monospace; }
+  .page-header { margin-bottom:24px; }
+
+  /* ── BUTTONS ── */
+  .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius:var(--radius); font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; border:1px solid transparent; white-space:nowrap; touch-action:manipulation; }
+  .btn-primary { background:var(--accent); color:#000; border-color:var(--accent); }
+  .btn-primary:hover { background:var(--accent2); border-color:var(--accent2); }
+  .btn-green { background:rgba(80,192,128,0.15); color:var(--green); border-color:rgba(80,192,128,0.3); }
+  .btn-green:hover { background:rgba(80,192,128,0.25); border-color:var(--green); }
+  .btn-ghost { background:transparent; color:var(--text2); border-color:var(--border2); }
+  .btn-ghost:hover { background:var(--surface2); color:var(--text); }
+  .btn-danger { background:transparent; color:var(--red); border-color:rgba(224,80,80,0.3); }
+  .btn-danger:hover { background:rgba(224,80,80,0.1); border-color:var(--red); }
+  .btn-purple { background:rgba(160,96,224,0.15); color:var(--purple); border-color:rgba(160,96,224,0.3); }
+  .btn-purple:hover { background:rgba(160,96,224,0.25); border-color:var(--purple); }
+  .btn-sm { padding:7px 12px; font-size:12px; }
+  .btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+  /* ── TABLES ── */
+  .data-table { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); overflow:hidden; width:100%; }
+  .data-table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .data-table table { width:100%; border-collapse:collapse; min-width:500px; }
+  .data-table th { padding:10px 14px; background:var(--surface2); border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; text-align:left; white-space:nowrap; }
+  .data-table td { padding:12px 14px; border-bottom:1px solid var(--border); font-size:13px; color:var(--text); vertical-align:middle; }
+  .data-table tr:last-child td { border-bottom:none; }
+  .data-table tr:hover td { background:var(--surface2); }
+  .tbl-empty { padding:40px 20px; text-align:center; color:var(--text3); font-size:14px; }
+
+  /* ── MOBILE CARDS ── */
+  .card-list { display:none; }
+  .entry-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:14px 16px; margin-bottom:10px; }
+  .entry-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .entry-card-meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .entry-card-row { display:flex; justify-content:space-between; font-size:13px; color:var(--text2); padding:2px 0; }
+  .entry-card-amount { font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:18px; color:var(--accent); }
+  .entry-card-amount.green { color:var(--green); }
+  .entry-card-amount.red { color:var(--red); }
+  .entry-card-date { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text3); }
+
+  /* ── CUSTOMER LIST ── */
+  .cust-list-header { display:grid; grid-template-columns:1fr 140px 130px 100px; padding:10px 20px; background:var(--surface2); border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; }
+  .cust-list-row { display:grid; grid-template-columns:1fr 140px 130px 100px; padding:14px 20px; border-bottom:1px solid var(--border); align-items:center; transition:background .1s; cursor:pointer; }
+  .cust-list-row:last-child { border-bottom:none; }
+  .cust-list-row:hover { background:var(--surface2); }
+  .cust-card-list { display:none; }
+  .cust-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:16px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; transition:background .15s; }
+  .cust-card:active { background:var(--surface2); }
+  .cust-card-left { flex:1; min-width:0; }
+  .cust-card-name { font-size:16px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
+  .cust-card-stats { display:flex; gap:12px; flex-wrap:wrap; }
+  .cust-card-stat { font-size:12px; font-family:'IBM Plex Mono',monospace; color:var(--text3); }
+  .cust-card-right { display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:12px; }
+  .cust-card-balance { font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:700; }
+
+  /* ── STATS ── */
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:16px 18px; }
+  .stat-label { font-size:10px; color:var(--text3); font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; }
+  .stat-value { font-size:22px; font-weight:700; margin-top:4px; font-family:'IBM Plex Mono',monospace; }
+  .stat-accent { color:var(--accent); }
+  .stat-green { color:var(--green); }
+  .stat-red { color:var(--red); }
+  .stat-blue { color:var(--blue); }
+  .stat-purple { color:var(--purple); }
+  .stat-sub { font-size:11px; color:var(--text3); margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+
+  /* ── BADGES ── */
+  .mono { font-family:'IBM Plex Mono',monospace; }
+  .amount-cell { font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--accent); white-space:nowrap; }
+  .paid-cell { font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--green); white-space:nowrap; }
+  .expense-cell { font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--red); white-space:nowrap; }
+  .badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; font-family:'IBM Plex Mono',monospace; }
+  .badge-laser { background:rgba(240,165,0,0.15); color:var(--accent); border:1px solid rgba(240,165,0,0.25); }
+  .badge-cnc { background:rgba(80,192,128,0.12); color:var(--green); border:1px solid rgba(80,192,128,0.25); }
+  .badge-custom { background:rgba(80,144,224,0.12); color:var(--blue); border:1px solid rgba(80,144,224,0.25); }
+  .badge-yes { background:rgba(80,192,128,0.12); color:var(--green); border:1px solid rgba(80,192,128,0.2); }
+  .badge-no { background:var(--surface3); color:var(--text3); border:1px solid var(--border); }
+  .badge-expense { background:rgba(224,80,80,0.1); color:var(--red); border:1px solid rgba(224,80,80,0.2); }
+
+  /* ── MODALS ── */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.80); display:flex; align-items:flex-end; justify-content:center; z-index:1000; animation:fadeIn .15s ease; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .modal { background:var(--surface); border:1px solid var(--border2); border-radius:16px 16px 0 0; width:100%; max-width:600px; max-height:92vh; overflow-y:auto; animation:slideUpModal .25s ease; -webkit-overflow-scrolling:touch; }
+  @keyframes slideUpModal { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .modal-header { padding:16px 20px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--surface); z-index:2; }
+  .modal-title { font-size:15px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; }
+  .modal-body { padding:20px; display:flex; flex-direction:column; gap:16px; padding-bottom:8px; }
+  .modal-footer { padding:14px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px; position:sticky; bottom:0; background:var(--surface); }
+
+  /* ── FIELDS ── */
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field-label { font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.07em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; }
+  .field input,.field select,.field textarea { background:var(--surface2); border:1px solid var(--border2); border-radius:var(--radius); padding:11px 14px; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:16px; outline:none; transition:border-color .15s; appearance:none; -webkit-appearance:none; }
+  .field input:focus,.field select:focus,.field textarea:focus { border-color:var(--accent); }
+  .field textarea { resize:vertical; min-height:72px; font-size:15px; }
+  .field select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:36px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .radio-group { display:flex; gap:8px; flex-wrap:wrap; }
+  .radio-opt { flex:1; min-width:100px; display:flex; align-items:center; justify-content:center; gap:6px; padding:11px 14px; border:1px solid var(--border2); border-radius:var(--radius); cursor:pointer; font-size:13px; font-weight:500; color:var(--text2); transition:all .15s; user-select:none; background:var(--surface2); touch-action:manipulation; }
+  .radio-opt:hover { border-color:var(--accent); color:var(--text); }
+  .radio-opt.selected { border-color:var(--accent); background:var(--accent-dim); color:var(--accent); font-weight:600; }
+  .radio-opt.selected-blue { border-color:var(--blue); background:rgba(80,144,224,0.12); color:var(--blue); font-weight:600; }
+  .radio-opt input { display:none; }
+
+  /* ── CALC PREVIEW ── */
+  .calc-preview { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+  .calc-title { font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.07em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; margin-bottom:10px; }
+  .calc-row { display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:var(--text2); font-family:'IBM Plex Mono',monospace; }
+  .calc-row.total { border-top:1px solid var(--border2); margin-top:6px; padding-top:8px; color:var(--accent); font-weight:700; font-size:15px; }
+
+  /* ── SETTINGS ── */
+  .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .settings-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; }
+  .settings-card-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .settings-field { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+  .settings-field label { font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.07em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; }
+  .settings-field input { background:var(--surface2); border:1px solid var(--border2); border-radius:var(--radius); padding:10px 12px; color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:15px; outline:none; transition:border-color .15s; }
+  .settings-field input:focus { border-color:var(--accent); }
+
+  /* ── ANALYTICS ── */
+  .analytics-overview { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+  .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; margin-bottom:14px; }
+  .chart-card-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .charts-2col { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:0; }
+  .bar-wrap { display:flex; flex-direction:column; gap:10px; }
+  .bar-item { display:flex; align-items:center; gap:10px; }
+  .bar-label { font-size:12px; color:var(--text2); width:88px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0; }
+  .bar-track { flex:1; background:var(--surface2); border-radius:4px; height:8px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:4px; transition:width .5s ease; }
+  .bar-val { font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--text3); width:72px; text-align:right; flex-shrink:0; }
+  .pie-wrap { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .pie-legend { display:flex; flex-direction:column; gap:6px; }
+  .pie-legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+  .pie-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .top-customer-card { background:linear-gradient(135deg,rgba(240,165,0,0.1),rgba(240,165,0,0.03)); border:1px solid rgba(240,165,0,0.25); border-radius:var(--radius2); padding:20px; display:flex; align-items:center; gap:18px; margin-bottom:14px; }
+
+  /* ── PROFIT CARD ── */
+  .profit-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+  .profit-card { border-radius:var(--radius2); padding:18px 20px; }
+  .profit-card-income { background:rgba(80,192,128,0.06); border:1px solid rgba(80,192,128,0.2); }
+  .profit-card-expense { background:rgba(224,80,80,0.06); border:1px solid rgba(224,80,80,0.2); }
+  .profit-card-net { background:rgba(240,165,0,0.08); border:1px solid rgba(240,165,0,0.25); }
+  .profit-card-label { font-size:10px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; margin-bottom:6px; }
+  .profit-card-value { font-size:26px; font-weight:800; font-family:'IBM Plex Mono',monospace; }
+  .profit-card-sub { font-size:11px; color:var(--text3); margin-top:4px; font-family:'IBM Plex Mono',monospace; }
+
+  /* ── EXPENSES ── */
+  .expense-filter-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .expense-filter-row input,.expense-filter-row select {
+    background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius);
+    padding:8px 12px; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:13px; outline:none;
+    appearance:none; -webkit-appearance:none;
+  }
+  .expense-filter-row select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; }
+
+  /* ── BACKUP ── */
+  .backup-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .backup-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; display:flex; flex-direction:column; gap:12px; }
+  .backup-card-title { font-size:15px; font-weight:700; color:var(--text); }
+  .backup-card-desc { font-size:13px; color:var(--text2); line-height:1.6; flex:1; }
+  .backup-tip { background:rgba(80,144,224,0.08); border:1px solid rgba(80,144,224,0.2); border-radius:var(--radius2); padding:14px 18px; display:flex; gap:12px; align-items:flex-start; margin-bottom:14px; }
+  .backup-tip-text { font-size:13px; color:var(--text2); line-height:1.65; }
+  .backup-tip-text strong { color:var(--text); }
+  .import-drop { border:2px dashed var(--border2); border-radius:var(--radius2); padding:28px 20px; text-align:center; cursor:pointer; transition:all .2s; background:var(--surface2); }
+  .import-drop:hover,.import-drop.drag { border-color:var(--accent); background:var(--accent-dim); }
+  .import-drop-icon { color:var(--text3); margin-bottom:10px; }
+  .import-drop-text { font-size:14px; font-weight:600; color:var(--text2); }
+  .import-drop-sub { font-size:12px; color:var(--text3); margin-top:4px; }
+  .success-banner { background:rgba(80,192,128,0.1); border:1px solid rgba(80,192,128,0.25); border-radius:var(--radius); padding:12px 16px; display:flex; align-items:center; gap:10px; font-size:13px; color:var(--green); font-weight:500; }
+
+  /* ── MONTH FILTER ── */
+  .month-filter-bar { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; margin-bottom:16px; }
+  .month-filter-bar::-webkit-scrollbar { display:none; }
+  .month-chip { flex-shrink:0; padding:6px 14px; border-radius:50px; border:1px solid var(--border2); background:var(--surface2); color:var(--text2); font-size:12px; font-weight:600; font-family:'IBM Plex Mono',monospace; cursor:pointer; transition:all .15s; white-space:nowrap; touch-action:manipulation; }
+  .month-chip:hover { border-color:var(--accent); color:var(--text); }
+  .month-chip.active { background:var(--accent); border-color:var(--accent); color:#000; }
+
+  /* ── BILL MODAL ── */
+  .bill-modal { background:#fff; border-radius:0; width:100%; max-width:600px; max-height:92vh; overflow-y:auto; animation:slideUpModal .25s ease; }
+  .bill-page { background:#fff; color:#111; font-family:'IBM Plex Sans',sans-serif; padding:32px 36px; }
+  .bill-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px; padding-bottom:20px; border-bottom:2px solid #111; }
+  .bill-brand-name { font-size:22px; font-weight:800; color:#111; letter-spacing:-0.02em; }
+  .bill-brand-sub { font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+  .bill-meta { text-align:right; }
+  .bill-meta-title { font-size:20px; font-weight:700; color:#111; }
+  .bill-meta-detail { font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
+  .bill-to-label { font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#888; font-family:'IBM Plex Mono',monospace; margin-bottom:4px; }
+  .bill-to-name { font-size:18px; font-weight:700; color:#111; }
+  .bill-to-period { font-size:13px; color:#555; font-family:'IBM Plex Mono',monospace; margin-top:2px; margin-bottom:24px; }
+  .bill-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  .bill-table th { padding:8px 10px; background:#f5f5f5; border-bottom:1px solid #ddd; font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#555; text-align:left; font-family:'IBM Plex Mono',monospace; }
+  .bill-table td { padding:9px 10px; border-bottom:1px solid #eee; font-size:12px; color:#222; vertical-align:middle; }
+  .bill-table tr:last-child td { border-bottom:none; }
+  .bill-table .amt { font-family:'IBM Plex Mono',monospace; font-weight:600; text-align:right; }
+  .bill-table .num { font-family:'IBM Plex Mono',monospace; text-align:right; }
+  .bill-summary { margin-left:auto; width:220px; margin-bottom:24px; }
+  .bill-sum-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; color:#444; border-bottom:1px solid #eee; font-family:'IBM Plex Mono',monospace; }
+  .bill-sum-row.total { font-size:16px; font-weight:700; color:#111; border-bottom:2px solid #111; border-top:2px solid #111; padding:8px 0; margin-top:4px; }
+  .bill-sum-row.paid { color:#1a7a3f; }
+  .bill-sum-row.balance-due { color:#c0392b; font-weight:700; }
+  .bill-sum-row.balance-ok { color:#1a7a3f; font-weight:700; }
+  .bill-footer { text-align:center; font-size:11px; color:#aaa; font-family:'IBM Plex Mono',monospace; padding-top:20px; border-top:1px solid #eee; }
+  .bill-actions { display:flex; gap:10px; padding:14px 20px; border-top:1px solid var(--border); background:var(--surface); position:sticky; bottom:0; }
+
+  @media print {
+    .modal-overlay, .bill-actions { display:none !important; }
+    .bill-modal { max-height:none; overflow:visible; }
+    .bill-page { padding:20px 24px; }
+  }
+
+  /* ── MISC ── */
+  .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--green); color:#000; padding:11px 22px; border-radius:50px; font-size:13px; font-weight:600; animation:toastIn .2s ease; z-index:9999; white-space:nowrap; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
+  @keyframes toastIn { from{transform:translateX(-50%) translateY(10px);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
+  .divider { border:none; border-top:1px solid var(--border); }
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid transparent; border-radius:var(--radius); background:transparent; cursor:pointer; color:var(--text3); transition:all .15s; touch-action:manipulation; }
+  .icon-btn:hover { background:rgba(224,80,80,0.1); color:var(--red); border-color:rgba(224,80,80,0.2); }
+  .icon-btn-edit { color:var(--text3); }
+  .icon-btn-edit:hover { background:rgba(80,144,224,0.1); color:var(--blue); border-color:rgba(80,144,224,0.2); }
+  .top-actions { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(6px)} }
+
+  /* ── CATEGORY TAG ── */
+  .cat-tag { display:inline-flex; align-items:center; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; font-family:'IBM Plex Mono',monospace; background:rgba(160,96,224,0.1); color:var(--purple); border:1px solid rgba(160,96,224,0.2); }
+
+  /* ── MASS ENTRY ── */
+  .me-layout { display:grid; grid-template-columns:1fr 280px; gap:16px; align-items:start; }
+  .me-main { min-width:0; }
+  .me-sidebar { position:sticky; top:80px; display:flex; flex-direction:column; gap:12px; }
+  .me-sidebar-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:18px; }
+  .me-sidebar-title { font-size:11px; font-weight:700; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; margin-bottom:14px; }
+  .me-stat { display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid var(--border); }
+  .me-stat:last-child { border-bottom:none; }
+  .me-stat-label { font-size:12px; color:var(--text2); }
+  .me-stat-val { font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px; }
+  .me-cust-breakdown { display:flex; flex-direction:column; gap:6px; }
+  .me-cust-row { display:flex; justify-content:space-between; align-items:center; padding:7px 10px; background:var(--surface2); border-radius:6px; }
+  .me-cust-row-name { font-size:12px; color:var(--text); font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px; }
+  .me-cust-row-amt { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); white-space:nowrap; }
+  .me-cust-row-cnt { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text3); margin-left:6px; }
+
+  .me-toolbar { display:flex; align-items:center; gap:8px; padding:10px 0 12px; flex-wrap:wrap; }
+  .me-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--border); border-radius:var(--radius2); background:var(--surface); }
+  .me-table { border-collapse:collapse; width:100%; min-width:920px; }
+  .me-table thead { position:sticky; top:0; z-index:10; }
+  .me-table th { padding:10px 8px; background:#1a1a1a; border-bottom:2px solid var(--border2); font-size:10px; font-weight:700; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; text-align:left; white-space:nowrap; }
+  .me-table td { padding:4px 4px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .me-table tbody tr:last-child td { border-bottom:none; }
+  .me-table tbody tr { transition:background .08s; }
+  .me-table tbody tr:hover td { background:rgba(255,255,255,0.015); }
+  .me-table tbody tr.me-row-selected td { background:rgba(240,165,0,0.05); }
+  .me-table tbody tr.me-row-error td { background:rgba(224,80,80,0.05); }
+  .me-table tbody tr.me-row-done td { background:rgba(80,192,128,0.04); }
+  .me-table tbody tr.me-row-error { border-left:3px solid var(--red); }
+  .me-table tbody tr.me-row-done { border-left:3px solid var(--green); }
+  
+  .mc-in { background:var(--surface2); border:1px solid transparent; border-radius:5px; padding:7px 9px; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:13px; outline:none; width:100%; transition:border-color .12s,background .12s; appearance:none; -webkit-appearance:none; }
+  .mc-in:hover { border-color:var(--border2); }
+  .mc-in:focus { border-color:var(--accent); background:var(--surface3); }
+  .mc-in.err { border-color:var(--red) !important; background:rgba(224,80,80,0.06); }
+  .mc-sel { background:var(--surface2); border:1px solid transparent; border-radius:5px; padding:7px 24px 7px 9px; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:13px; outline:none; width:100%; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .12s; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='5' viewBox='0 0 9 5'%3E%3Cpath d='M1 1l3.5 3L8 1' stroke='%235a5a5a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 7px center; }
+  .mc-sel:hover,.mc-sel:focus { border-color:var(--accent); background-color:var(--surface3); }
+
+  .me-row-num { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text3); text-align:center; user-select:none; min-width:28px; }
+  .me-amount-display { font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13px; color:var(--accent); padding:7px 8px; white-space:nowrap; min-width:90px; }
+  .me-amount-display.zero { color:var(--text3); font-weight:400; }
+  .me-amount-display.filled { color:var(--accent); }
+
+  .me-paper-btn { display:inline-flex; align-items:center; gap:4px; cursor:pointer; user-select:none; padding:6px 10px; border-radius:5px; border:1px solid transparent; font-size:12px; font-weight:600; transition:all .12s; white-space:nowrap; font-family:'IBM Plex Mono',monospace; }
+  .me-paper-btn.off { background:var(--surface2); color:var(--text3); border-color:transparent; }
+  .me-paper-btn.off:hover { border-color:var(--border2); color:var(--text); }
+  .me-paper-btn.on { background:rgba(80,192,128,0.12); color:var(--green); border-color:rgba(80,192,128,0.25); }
+
+  .me-row-actions { display:flex; gap:2px; align-items:center; padding:0 2px; }
+  .me-icon-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid transparent; border-radius:5px; background:transparent; cursor:pointer; color:var(--text3); transition:all .12s; }
+  .me-icon-btn:hover { background:var(--surface2); border-color:var(--border); color:var(--text); }
+  .me-icon-btn.del:hover { background:rgba(224,80,80,0.1); border-color:rgba(224,80,80,0.2); color:var(--red); }
+
+  .me-cust-wrap { position:relative; }
+  .me-cust-drop { position:absolute; top:calc(100% + 3px); left:0; min-width:200px; background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius); z-index:200; max-height:200px; overflow-y:auto; box-shadow:0 12px 32px rgba(0,0,0,0.5); }
+  .me-cust-opt { padding:9px 12px; font-size:13px; cursor:pointer; color:var(--text); display:flex; align-items:center; gap:8px; transition:background .08s; }
+  .me-cust-opt:hover,.me-cust-opt.active { background:var(--surface2); }
+  .me-cust-opt .cust-bal { font-family:'IBM Plex Mono',monospace; font-size:11px; margin-left:auto; }
+  .me-cust-opt.create-new { color:var(--green); font-weight:600; border-top:1px solid var(--border); }
+  .me-cust-chip { display:inline-flex; align-items:center; gap:5px; background:rgba(240,165,0,0.1); border:1px solid rgba(240,165,0,0.2); border-radius:4px; padding:3px 7px; font-size:12px; font-weight:600; color:var(--accent); }
+
+  .me-undo-bar { background:rgba(80,144,224,0.08); border:1px solid rgba(80,144,224,0.2); border-radius:var(--radius); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--blue); margin-bottom:12px; animation:fadeIn .2s ease; }
+  .me-save-bar { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; margin-top:14px; flex-wrap:wrap; gap:12px; position:sticky; bottom:80px; z-index:50; box-shadow:0 -4px 24px rgba(0,0,0,0.3); }
+  .me-save-stats { display:flex; gap:20px; flex-wrap:wrap; }
+  .me-save-stat { display:flex; flex-direction:column; gap:1px; }
+  .me-save-stat-label { font-size:9px; color:var(--text3); font-weight:600; letter-spacing:.09em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; }
+  .me-save-stat-val { font-size:18px; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+  .me-kbd { display:inline-flex; align-items:center; justify-content:center; background:var(--surface2); border:1px solid var(--border2); border-radius:4px; padding:2px 6px; font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--text3); }
+
+  @media(max-width:900px) {
+    .me-layout { grid-template-columns:1fr; }
+    .me-sidebar { position:static; }
+  }
+
+  /* ══ RESPONSIVE ══ */
+  @media(max-width:900px) {
+    .analytics-overview { grid-template-columns:repeat(2,1fr); }
+    .charts-2col { grid-template-columns:1fr; }
+    .settings-grid { grid-template-columns:1fr; }
+    .profit-summary { grid-template-columns:1fr; gap:8px; }
+    .dash-bar { height:auto; padding:12px 16px; gap:0; flex-wrap:nowrap; overflow-x:auto; }
+  }
+
+  @media(max-width:600px) {
+    :root { --bottom-nav-h:64px; }
+    .header { padding:0 16px; height:50px; }
+    .header-nav { display:none; }
+    .dash-bar { padding:10px 14px; gap:0; }
+    .dash-item { padding:0 12px; }
+    .dash-value { font-size:14px; }
+    .dash-label { font-size:9px; }
+    .bottom-nav {
+      display:flex; position:fixed; bottom:0; left:0; right:0;
+      height:var(--bottom-nav-h); background:var(--surface); border-top:1px solid var(--border);
+      z-index:200; padding:0 4px; padding-bottom:env(safe-area-inset-bottom);
+    }
+    .bnav-btn {
+      flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:4px; border:none; background:transparent; color:var(--text3);
+      font-family:'IBM Plex Sans',sans-serif; font-size:9px; font-weight:600;
+      letter-spacing:0.02em; cursor:pointer; padding:8px 0; transition:color .15s;
+    }
+    .bnav-btn.active { color:var(--accent); }
+    .bnav-btn.active svg { stroke:var(--accent); }
+    .main, .main.main-full { padding:14px 14px calc(var(--bottom-nav-h) + 20px); }
+    .page-title { font-size:19px; }
+    .stats-row { grid-template-columns:repeat(3,1fr); gap:8px; }
+    .stat-card { padding:12px 10px; }
+    .stat-value { font-size:16px; }
+    .stat-label { font-size:9px; }
+    .data-table.cust-table { display:none; }
+    .cust-card-list { display:block; }
+    .cust-list-header { display:none; }
+    .data-table.entries-table,.data-table.payments-table,.data-table.expenses-table { display:none; }
+    .card-list { display:block; }
+    .analytics-overview { grid-template-columns:repeat(2,1fr); gap:8px; }
+    .profit-summary { grid-template-columns:1fr; gap:8px; }
+    .charts-2col { grid-template-columns:1fr; }
+    .settings-grid { grid-template-columns:1fr; }
+    .backup-grid { grid-template-columns:1fr; }
+    .form-row { grid-template-columns:1fr; }
+    .modal-footer { flex-direction:column-reverse; }
+    .modal-footer .btn { width:100%; justify-content:center; }
+    .toast { bottom:calc(var(--bottom-nav-h) + 12px); }
+    .top-actions { flex-direction:column; align-items:stretch; }
+    .top-actions .btn { width:100%; justify-content:center; }
+    .top-actions input,.top-actions select { width:100% !important; }
+    .expense-filter-row { flex-direction:column; }
+    .expense-filter-row input,.expense-filter-row select { width:100%; }
+    .search-input { width:100% !important; }
+  }
+`;
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [page, setPage] = useState("home");
+  const [selectedCid, setSelectedCid] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [loaded, setLoaded] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem("nova_theme") || "night");
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("nova_theme", theme);
+  }, [theme]);
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [showAddEntry, setShowAddEntry] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [editExpense, setEditExpense] = useState(null);
+  const [pwModal, setPwModal] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const c = await loadData(STORAGE_KEYS.customers);
+      const s = await loadData(STORAGE_KEYS.settings);
+      const e = await loadData(STORAGE_KEYS.expenses);
+      if (c) setCustomers(c);
+      if (s) setSettings(s);
+      if (e) setExpenses(e);
+      setLoaded(true);
+    })();
+  }, []);
+  useEffect(() => { if (loaded) saveData(STORAGE_KEYS.customers, customers); }, [customers, loaded]);
+  useEffect(() => { if (loaded) saveData(STORAGE_KEYS.settings, settings); }, [settings, loaded]);
+  useEffect(() => { if (loaded) saveData(STORAGE_KEYS.expenses, expenses); }, [expenses, loaded]);
+
+  const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2200); };
+  const requirePw = (label, fn) => setPwModal({ label, fn });
+  const selCust = customers.find(c => c.id === selectedCid);
+
+  const totalWork = c => (c.entries || []).reduce((s, e) => s + e.amount, 0);
+  const totalPaid = c => (c.payments || []).reduce((s, p) => s + p.amount, 0);
+  const balance   = c => totalWork(c) - totalPaid(c);
+
+  // Global stats
+  const globalTotalWork     = customers.reduce((s, c) => s + totalWork(c), 0);
+  const globalTotalPaid     = customers.reduce((s, c) => s + totalPaid(c), 0);
+  const globalTotalPending  = customers.reduce((s, c) => s + Math.max(0, balance(c)), 0);
+  const globalTotalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const globalNetProfit     = globalTotalPaid - globalTotalExpenses;
+
+  function addCustomer(name) {
+    const t = name.trim(); if (!t) return;
+    setCustomers(p => [...p, { id: uid(), name: t, entries: [], payments: [] }]);
+    setShowAddCustomer(false); showToast("Customer added");
+  }
+  function deleteCustomer(id) {
+    setCustomers(p => p.filter(c => c.id !== id));
+    setPage("home"); showToast("Customer deleted");
+  }
+  function addEntry(entry) {
+    setCustomers(p => p.map(c => c.id === selectedCid ? { ...c, entries: [entry, ...(c.entries || [])] } : c));
+    setShowAddEntry(false); showToast("Entry saved");
+  }
+  function deleteEntry(cid, eid) {
+    setCustomers(p => p.map(c => c.id === cid ? { ...c, entries: (c.entries || []).filter(e => e.id !== eid) } : c));
+    showToast("Entry deleted");
+  }
+  function addPayment(payment) {
+    setCustomers(p => p.map(c => c.id === selectedCid ? { ...c, payments: [payment, ...(c.payments || [])] } : c));
+    setShowAddPayment(false); showToast("Payment recorded");
+  }
+  function deletePayment(cid, pid) {
+    setCustomers(p => p.map(c => c.id === cid ? { ...c, payments: (c.payments || []).filter(x => x.id !== pid) } : c));
+    showToast("Payment deleted");
+  }
+  function addExpense(exp) {
+    setExpenses(p => [exp, ...p]);
+    setShowAddExpense(false); showToast("Expense recorded");
+  }
+  function updateExpense(exp) {
+    setExpenses(p => p.map(e => e.id === exp.id ? exp : e));
+    setEditExpense(null); showToast("Expense updated");
+  }
+  function deleteExpense(id) {
+    setExpenses(p => p.filter(e => e.id !== id));
+    showToast("Expense deleted");
+  }
+  function saveSettings(s) { setSettings(s); showToast("Settings saved"); }
+
+  function addMassEntries(rows) {
+    // rows: [{customerId, entry}]
+    setCustomers(prev => {
+      let updated = [...prev];
+      rows.forEach(({ customerId, entry }) => {
+        updated = updated.map(c =>
+          c.id === customerId ? { ...c, entries: [entry, ...(c.entries || [])] } : c
+        );
+      });
+      return updated;
+    });
+    showToast(`${rows.length} entr${rows.length===1?"y":"ies"} saved!`);
+  }
+  function addCustomerDirect(name) {
+    const t = name.trim(); if (!t) return null;
+    const newCust = { id: uid(), name: t, entries: [], payments: [] };
+    setCustomers(p => [...p, newCust]);
+    return newCust;
+  }
+
+  if (!loaded) return <div style={{ color: "#9a9a9a", padding: 40, fontFamily: "IBM Plex Mono" }}>Loading…</div>;
+
+  const navPages = [
+    ["home","users","Customers"],
+    ["mass","table","Mass Entry"],
+    ["expenses","wallet","Expenses"],
+    ["analytics","chart","Analytics"],
+    ["backup","shield","Backup"],
+    ["settings","settings","Settings"],
+  ];
+
+  return (
+    <>
+      <style>{style}</style>
+      <div className="app">
+        {/* ── Header ── */}
+        <header className="header">
+          <div className="header-logo">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="8" fill="#f0a500"/>
+              <text x="16" y="22" textAnchor="middle" fontFamily="IBM Plex Mono,monospace" fontWeight="700" fontSize="17" fill="#000">N</text>
+            </svg>
+            <span style={{ display:"flex", flexDirection:"column", lineHeight:1.1 }}>
+              <span style={{ fontSize:14, fontWeight:700, color:"var(--accent)", letterSpacing:"0.06em" }}>NOVA</span>
+              <span style={{ fontSize:9, fontWeight:500, color:"var(--text3)", letterSpacing:"0.12em" }}>ACCOUNTINGS</span>
+            </span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center" }}>
+            <nav className="header-nav">
+              {navPages.map(([pg,ic,lb]) => (
+                <button key={pg} className={`nav-btn ${page===pg?"active":""}`} onClick={() => setPage(pg)}>
+                  <Icon name={ic} size={13}/> {lb}
+                </button>
+              ))}
+            </nav>
+            <button className="theme-toggle" onClick={() => setTheme(t => t === "night" ? "day" : "night")} title="Toggle day/night mode">
+              <Icon name={theme === "night" ? "sun" : "moon"} size={14}/>
+              {theme === "night" ? "Day" : "Night"}
+            </button>
+          </div>
+        </header>
+
+        {/* ── Dashboard Summary Bar ── */}
+        <div className="dash-bar">
+          {[
+            ["Pending Payments", inr(globalTotalPending), "var(--red)"],
+            ["Money Received",   inr(globalTotalPaid),    "var(--green)"],
+            ["Total Expenses",   inr(globalTotalExpenses),"var(--purple)"],
+            ["Net Profit",       inr(globalNetProfit),    globalNetProfit >= 0 ? "var(--accent)" : "var(--red)"],
+          ].map(([lb, val, col]) => (
+            <div key={lb} className="dash-item">
+              <div className="dash-label">{lb}</div>
+              <div className="dash-value" style={{ color: col }}>{val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Bottom Nav (mobile) ── */}
+        <nav className="bottom-nav">
+          {navPages.map(([pg,ic,lb]) => (
+            <button key={pg} className={`bnav-btn ${page===pg?"active":""}`} onClick={() => setPage(pg)}>
+              <Icon name={ic} size={19}/>
+              <span>{lb}</span>
+            </button>
+          ))}
+        </nav>
+
+        <main className={`main ${page === "mass" ? "main-full" : ""}`}>
+          {page==="home" && <HomePage customers={customers} totalWork={totalWork} balance={balance} onOpen={id=>{setSelectedCid(id);setPage("customer");}} onAdd={()=>setShowAddCustomer(true)}/>}
+          {page==="mass" && <MassEntryPage customers={customers} settings={settings} onSave={addMassEntries} onAddCustomer={addCustomerDirect}/>}
+          {page==="customer" && selCust && (
+            <CustomerPage
+              customer={selCust}
+              totalWork={totalWork(selCust)} totalPaid={totalPaid(selCust)} balance={balance(selCust)}
+              onBack={()=>setPage("home")}
+              onAddEntry={()=>setShowAddEntry(true)}
+              onAddPayment={()=>setShowAddPayment(true)}
+              onDeleteEntry={eid=>requirePw("Delete this work entry?",()=>deleteEntry(selCust.id,eid))}
+              onDeletePayment={pid=>requirePw("Delete this payment record?",()=>deletePayment(selCust.id,pid))}
+              onDeleteCustomer={()=>requirePw(`Delete "${selCust.name}" and all data?`,()=>deleteCustomer(selCust.id))}
+            />
+          )}
+          {page==="expenses" && (
+            <ExpensesPage
+              expenses={expenses}
+              totalPaid={globalTotalPaid}
+              onAdd={()=>setShowAddExpense(true)}
+              onEdit={exp=>setEditExpense(exp)}
+              onDelete={id=>requirePw("Delete this expense?",()=>deleteExpense(id))}
+            />
+          )}
+          {page==="analytics" && <AnalyticsPage customers={customers} expenses={expenses} totalWork={totalWork} totalPaid={totalPaid} balance={balance}/>}
+          {page==="backup" && <BackupPage customers={customers} expenses={expenses} settings={settings} onRestore={(c,e,s)=>{ setCustomers(c); setExpenses(e); setSettings(s); showToast("Data restored successfully!"); }} showToast={showToast}/>}
+          {page==="settings" && <SettingsPage settings={settings} onSave={saveSettings}/>}
+        </main>
+
+        {showAddCustomer && <AddCustomerModal onClose={()=>setShowAddCustomer(false)} onAdd={addCustomer}/>}
+        {showAddEntry && selCust && <AddEntryModal onClose={()=>setShowAddEntry(false)} onAdd={addEntry} settings={settings}/>}
+        {showAddPayment && selCust && <AddPaymentModal onClose={()=>setShowAddPayment(false)} onAdd={addPayment}/>}
+        {showAddExpense && <AddExpenseModal onClose={()=>setShowAddExpense(false)} onSave={addExpense}/>}
+        {editExpense && <AddExpenseModal onClose={()=>setEditExpense(null)} onSave={updateExpense} initial={editExpense}/>}
+        {pwModal && <PasswordModal label={pwModal.label} onClose={()=>setPwModal(null)} onConfirm={()=>{pwModal.fn();setPwModal(null);}}/>}
+        {toast && <div className="toast">✓ {toast}</div>}
+      </div>
+    </>
+  );
+}
+
+// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+function HomePage({ customers, totalWork, balance, onOpen, onAdd }) {
+  const [search, setSearch] = useState("");
+  const filtered = customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  return (
+    <>
+      <div className="page-header"><div className="page-title">Customers</div><div className="page-sub">Laser &amp; CNC Sheet Billing</div></div>
+      <div className="top-actions">
+        <input className="search-input" style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"10px 14px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:14,outline:"none",width:220}} placeholder="Search customer…" value={search} onChange={e=>setSearch(e.target.value)}/>
+        <button className="btn btn-primary" onClick={onAdd}><Icon name="plus" size={14}/> Add Customer</button>
+      </div>
+      <div className="data-table cust-table">
+        <div className="cust-list-header"><span>Customer</span><span>Work Total</span><span>Balance Due</span><span></span></div>
+        {filtered.length===0 && <div className="tbl-empty">{customers.length===0?"No customers yet. Add one to get started.":"No results."}</div>}
+        {filtered.map(c=>{
+          const bal=balance(c);
+          return (
+            <div key={c.id} className="cust-list-row" onClick={()=>onOpen(c.id)}>
+              <div style={{fontWeight:600,fontSize:15}}>{c.name}</div>
+              <div className="mono" style={{fontWeight:600,color:"var(--accent)",fontSize:14}}>{inr(totalWork(c))}</div>
+              <div className="mono" style={{fontWeight:600,fontSize:14,color:bal>0?"var(--red)":"var(--green)"}}>{inr(bal)}</div>
+              <div><button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();onOpen(c.id);}}>Open →</button></div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="cust-card-list">
+        {filtered.length===0 && <div style={{textAlign:"center",padding:"40px 0",color:"var(--text3)",fontSize:14}}>{customers.length===0?"No customers yet.":"No results."}</div>}
+        {filtered.map(c=>{
+          const bal=balance(c);
+          return (
+            <div key={c.id} className="cust-card" onClick={()=>onOpen(c.id)}>
+              <div className="cust-card-left">
+                <div className="cust-card-name">{c.name}</div>
+                <div className="cust-card-stats">
+                  <div className="cust-card-stat">Work: <span style={{color:"var(--accent)"}}>{inr(totalWork(c))}</span></div>
+                  <div className="cust-card-stat">{(c.entries||[]).length} entries</div>
+                </div>
+              </div>
+              <div className="cust-card-right">
+                <div className="cust-card-balance" style={{color:bal>0?"var(--red)":"var(--green)"}}>{inr(bal)}</div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// ─── CUSTOMER PAGE ────────────────────────────────────────────────────────────
+function CustomerPage({ customer, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onDeletePayment, onDeleteCustomer }) {
+  const [tab, setTab] = useState("entries");
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [showBill, setShowBill] = useState(false);
+  const [billMonth, setBillMonth] = useState("all");
+
+  const entryMonths = [...new Set((customer.entries||[]).map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const filteredEntries = filterMonth==="all" ? (customer.entries||[]) : (customer.entries||[]).filter(e=>e.date.startsWith(filterMonth));
+  const filteredWork = filteredEntries.reduce((s,e)=>s+e.amount,0);
+
+  function entryTypeLabel(e) {
+    if (e.sheetType==="Custom") return e.description || "Custom Entry";
+    if (e.sheetType==="Laser") {
+      const parts = [];
+      if ((e.s13sheets||0) > 0) parts.push(`13" ×${e.s13sheets}`);
+      if ((e.s16sheets||0) > 0) parts.push(`16" ×${e.s16sheets}`);
+      return parts.length ? parts.join(" + ") : `${e.sheetSize||""}" Laser`;
+    }
+    return e.workType || "CNC";
+  }
+
+  return (
+    <>
+      <div style={{marginBottom:18}}>
+        <button className="btn btn-ghost btn-sm" style={{marginBottom:12}} onClick={onBack}><Icon name="back" size={13}/> Back</button>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
+          <div>
+            <div className="page-title">{customer.name}</div>
+            <div className="page-sub">Customer Account</div>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button className="btn btn-sm" style={{background:"rgba(80,144,224,0.12)",color:"var(--blue)",border:"1px solid rgba(80,144,224,0.25)"}} onClick={()=>{setBillMonth(filterMonth);setShowBill(true);}}>
+              <Icon name="receipt" size={13}/> Generate Bill
+            </button>
+            <button className="btn btn-danger btn-sm" onClick={onDeleteCustomer}><Icon name="trash" size={13}/> Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="stats-row">
+        <div className="stat-card">
+          <div className="stat-label">{filterMonth==="all"?"Total Work":"Month Work"}</div>
+          <div className="stat-value stat-accent">{inr(filterMonth==="all"?totalWork:filteredWork)}</div>
+          <div className="stat-sub">{filteredEntries.length} entries</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Total Paid</div>
+          <div className="stat-value stat-green">{inr(totalPaid)}</div>
+          <div className="stat-sub">{(customer.payments||[]).length} payments</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Balance</div>
+          <div className={`stat-value ${balance>0?"stat-red":"stat-green"}`}>{inr(balance)}</div>
+          <div className="stat-sub">{balance>0?"Pending":balance<0?"Overpaid":"Settled ✓"}</div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {[["entries","laser","Work Entries"],["payments","payment","Payments"]].map(([t,ic,lb])=>(
+          <button key={t} className={`btn btn-sm ${tab===t?"btn-primary":"btn-ghost"}`} onClick={()=>setTab(t)}>
+            <Icon name={ic} size={12}/> {lb}
+          </button>
+        ))}
+      </div>
+
+      {tab==="entries" && (
+        <>
+          {entryMonths.length>0 && (
+            <div className="month-filter-bar">
+              <div className={`month-chip ${filterMonth==="all"?"active":""}`} onClick={()=>setFilterMonth("all")}>All Months</div>
+              {entryMonths.map(m=>(
+                <div key={m} className={`month-chip ${filterMonth===m?"active":""}`} onClick={()=>setFilterMonth(m)}>{fmtMonth(m)}</div>
+              ))}
+            </div>
+          )}
+          <div className="top-actions" style={{marginBottom:12}}>
+            <span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>
+              {filterMonth==="all"?"All Entries":`${fmtMonth(filterMonth)} — ${filteredEntries.length} entries`}
+            </span>
+            <button className="btn btn-primary btn-sm" onClick={onAddEntry}><Icon name="plus" size={13}/> Add Entry</button>
+          </div>
+
+          {/* Desktop table */}
+          <div className="data-table entries-table">
+            {filteredEntries.length===0 ? (
+              <div className="tbl-empty">{(customer.entries||[]).length===0?"No entries yet.":"No entries for this month."}</div>
+            ) : (
+              <div className="data-table-scroll">
+                <table>
+                  <thead><tr><th>Date</th><th>Type</th><th>Details</th><th>Sheets</th><th>Dots</th><th>Amount</th><th></th></tr></thead>
+                  <tbody>
+                    {filteredEntries.map(e=>(
+                      <tr key={e.id}>
+                        <td className="mono" style={{fontSize:12,color:"var(--text2)",whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
+                        <td>
+                          <span className={`badge ${e.sheetType==="Laser"?"badge-laser":e.sheetType==="Custom"?"badge-custom":"badge-cnc"}`}>
+                            <Icon name={e.sheetType==="Laser"?"laser":e.sheetType==="Custom"?"custom":"cnc"} size={10}/>
+                            {" "}{e.sheetType}
+                          </span>
+                        </td>
+                        <td style={{fontSize:12,color:"var(--text2)",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{entryTypeLabel(e)}</td>
+                        <td className="mono" style={{fontSize:13}}>{e.sheets||"—"}</td>
+                        <td className="mono" style={{fontSize:13,color:"var(--text2)"}}>{e.dots>0?e.dots.toLocaleString("en-IN"):"—"}</td>
+                        <td className="amount-cell">{inr(e.amount)}</td>
+                        <td><button className="icon-btn" onClick={()=>onDeleteEntry(e.id)}><Icon name="trash" size={13}/></button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile cards */}
+          <div className="card-list">
+            {filteredEntries.length===0 && <div style={{textAlign:"center",padding:"32px 0",color:"var(--text3)",fontSize:14}}>{(customer.entries||[]).length===0?"No entries yet. Tap 'Add Entry' to begin.":"No entries for this month."}</div>}
+            {filteredEntries.map(e=>(
+              <div key={e.id} className="entry-card">
+                <div className="entry-card-top">
+                  <span className="entry-card-date">{fmtDate(e.date)}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span className="entry-card-amount">{inr(e.amount)}</span>
+                    <button className="icon-btn" onClick={()=>onDeleteEntry(e.id)}><Icon name="trash" size={13}/></button>
+                  </div>
+                </div>
+                <div className="entry-card-meta">
+                  <span className={`badge ${e.sheetType==="Laser"?"badge-laser":e.sheetType==="Custom"?"badge-custom":"badge-cnc"}`}>
+                    <Icon name={e.sheetType==="Laser"?"laser":e.sheetType==="Custom"?"custom":"cnc"} size={10}/> {e.sheetType}
+                  </span>
+                  <span className="badge badge-no">{entryTypeLabel(e)}</span>
+                </div>
+                {e.sheets>0 && <div className="entry-card-row"><span style={{color:"var(--text3)"}}>Sheets</span><span className="mono">{e.sheets}</span></div>}
+                {e.dots>0 && <div className="entry-card-row"><span style={{color:"var(--text3)"}}>Dots</span><span className="mono">{e.dots?.toLocaleString("en-IN")}</span></div>}
+              </div>
+            ))}
+          </div>
+
+          {filterMonth!=="all" && filteredEntries.length>0 && (
+            <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:"var(--radius2)",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
+              <span style={{fontSize:13,color:"var(--text2)",fontWeight:600}}>{fmtMonth(filterMonth)} Total</span>
+              <span style={{fontSize:18,fontWeight:700,color:"var(--accent)",fontFamily:"IBM Plex Mono"}}>{inr(filteredWork)}</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab==="payments" && (
+        <>
+          <div className="top-actions">
+            <span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>Payment History</span>
+            <button className="btn btn-green btn-sm" onClick={onAddPayment}><Icon name="plus" size={13}/> Add Payment</button>
+          </div>
+          <div className="data-table payments-table">
+            {(customer.payments||[]).length===0 ? <div className="tbl-empty">No payments yet.</div> : (
+              <div className="data-table-scroll">
+                <table>
+                  <thead><tr><th>Date</th><th>Amount Paid</th><th>Notes</th><th></th></tr></thead>
+                  <tbody>
+                    {(customer.payments||[]).map(p=>(
+                      <tr key={p.id}>
+                        <td className="mono" style={{fontSize:12,color:"var(--text2)",whiteSpace:"nowrap"}}>{fmtDate(p.date)}</td>
+                        <td className="paid-cell">{inr(p.amount)}</td>
+                        <td style={{color:"var(--text2)",fontSize:13}}>{p.notes||<span style={{color:"var(--text3)"}}>—</span>}</td>
+                        <td><button className="icon-btn" onClick={()=>onDeletePayment(p.id)}><Icon name="trash" size={13}/></button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="card-list">
+            {(customer.payments||[]).length===0 && <div style={{textAlign:"center",padding:"32px 0",color:"var(--text3)",fontSize:14}}>No payments yet. Tap 'Add Payment'.</div>}
+            {(customer.payments||[]).map(p=>(
+              <div key={p.id} className="entry-card">
+                <div className="entry-card-top">
+                  <span className="entry-card-date">{fmtDate(p.date)}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span className="entry-card-amount green">{inr(p.amount)}</span>
+                    <button className="icon-btn" onClick={()=>onDeletePayment(p.id)}><Icon name="trash" size={13}/></button>
+                  </div>
+                </div>
+                {p.notes && <div style={{fontSize:13,color:"var(--text2)",marginTop:4}}>{p.notes}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {showBill && <BillModal customer={customer} billMonth={billMonth} setBillMonth={setBillMonth} totalPaid={totalPaid} balance={balance} onClose={()=>setShowBill(false)}/>}
+    </>
+  );
+}
+
+// ─── BILL MODAL ───────────────────────────────────────────────────────────────
+function BillModal({ customer, billMonth, setBillMonth, totalPaid, balance, onClose }) {
+  const billRef = useRef();
+  const entryMonths = [...new Set((customer.entries||[]).map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const billEntries = billMonth==="all" ? (customer.entries||[]) : (customer.entries||[]).filter(e=>e.date.startsWith(billMonth));
+  const billTotal = billEntries.reduce((s,e)=>s+e.amount,0);
+  const billBalance = billMonth==="all" ? balance : billTotal;
+  const periodLabel = billMonth==="all" ? "All Time" : fmtMonth(billMonth);
+  const billNo = `NOVA-${customer.name.replace(/\s/g,"").toUpperCase().slice(0,4)}-${billMonth==="all"?"ALL":billMonth.replace("-","")}`;
+  const today = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
+
+  function entryDetails(e) {
+    if (e.sheetType==="Custom") return e.description || "Custom Entry";
+    if (e.sheetType==="Laser") {
+      const parts = [];
+      if ((e.s13sheets||0) > 0) parts.push(`13" ×${e.s13sheets}${e.s13dots>0?" ("+e.s13dots+" dots)":""}`);
+      if ((e.s16sheets||0) > 0) parts.push(`16" ×${e.s16sheets}${e.s16dots>0?" ("+e.s16dots+" dots)":""}`);
+      const base = parts.length ? parts.join(" + ") : `${e.sheetSize||""}" Sheet`;
+      return base + (e.paper ? " + Paper" : "");
+    }
+    return `${e.workType}`;
+  }
+
+  function handlePrint() {
+    const content = billRef.current.innerHTML;
+    const win = window.open("","_blank","width=700,height=900");
+    win.document.write(`<!DOCTYPE html><html><head><title>Bill - ${customer.name}</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;color:#111;padding:32px 36px;}table{width:100%;border-collapse:collapse;}th{padding:8px 10px;background:#f5f5f5;border-bottom:1px solid #ddd;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#555;text-align:left;}td{padding:9px 10px;border-bottom:1px solid #eee;font-size:12px;color:#222;vertical-align:middle;}tr:last-child td{border-bottom:none;}.amt,.num{text-align:right;font-family:monospace;}</style>
+    </head><body>${content}</body></html>`);
+    win.document.close(); win.focus();
+    setTimeout(()=>{ win.print(); win.close(); }, 400);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="bill-modal">
+        <div style={{background:"var(--surface)",padding:"14px 20px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={{fontSize:12,fontWeight:700,color:"var(--text3)",fontFamily:"IBM Plex Mono",whiteSpace:"nowrap"}}>Bill Period:</span>
+          <div style={{display:"flex",gap:6,overflowX:"auto",flex:1,paddingBottom:2,scrollbarWidth:"none"}}>
+            <div className={`month-chip ${billMonth==="all"?"active":""}`} onClick={()=>setBillMonth("all")}>All Time</div>
+            {entryMonths.map(m=><div key={m} className={`month-chip ${billMonth===m?"active":""}`} onClick={()=>setBillMonth(m)}>{fmtMonth(m)}</div>)}
+          </div>
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
+        </div>
+        <div ref={billRef} className="bill-page">
+          <div className="bill-header">
+            <div><div className="bill-brand-name">Nova Accountings</div><div className="bill-brand-sub">Laser &amp; CNC Sheet Billing</div></div>
+            <div className="bill-meta"><div className="bill-meta-title">INVOICE</div><div className="bill-meta-detail"># {billNo}</div><div className="bill-meta-detail">Date: {today}</div></div>
+          </div>
+          <div className="bill-to-label">Bill To</div>
+          <div className="bill-to-name">{customer.name}</div>
+          <div className="bill-to-period">Period: {periodLabel}</div>
+          {billEntries.length===0 ? <div style={{textAlign:"center",padding:"32px 0",color:"#aaa",fontSize:14}}>No entries for this period.</div> : (
+            <table className="bill-table">
+              <thead><tr><th>Date</th><th>Type</th><th>Details</th><th className="num">Sheets</th><th className="num">Dots</th><th className="amt">Amount</th></tr></thead>
+              <tbody>
+                {billEntries.map((e,i)=>(
+                  <tr key={e.id} style={{background:i%2===0?"#fff":"#fafafa"}}>
+                    <td style={{whiteSpace:"nowrap",fontFamily:"monospace",fontSize:11}}>{fmtDate(e.date)}</td>
+                    <td><span style={{background:e.sheetType==="Laser"?"#fff8e1":e.sheetType==="Custom"?"#e3f2fd":"#e8f5e9",color:e.sheetType==="Laser"?"#b76e00":e.sheetType==="Custom"?"#1565c0":"#2e7d32",padding:"2px 7px",borderRadius:4,fontSize:11,fontWeight:700}}>{e.sheetType}</span></td>
+                    <td style={{fontSize:12}}>{entryDetails(e)}</td>
+                    <td className="num">{e.sheets||"—"}</td>
+                    <td className="num">{e.dots>0?e.dots.toLocaleString("en-IN"):"—"}</td>
+                    <td className="amt">₹{e.amount.toLocaleString("en-IN",{minimumFractionDigits:2})}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div className="bill-summary">
+            <div className="bill-sum-row total"><span>Total Work</span><span>₹{billTotal.toLocaleString("en-IN",{minimumFractionDigits:2})}</span></div>
+            {billMonth==="all" && <>
+              <div className="bill-sum-row paid"><span>Amount Paid</span><span>- ₹{totalPaid.toLocaleString("en-IN",{minimumFractionDigits:2})}</span></div>
+              <div className={`bill-sum-row ${billBalance>0?"balance-due":"balance-ok"}`}>
+                <span>{billBalance>0?"Balance Due":"Settled"}</span>
+                <span>₹{Math.abs(billBalance).toLocaleString("en-IN",{minimumFractionDigits:2})}</span>
+              </div>
+            </>}
+          </div>
+          <div className="bill-footer">Generated by Nova Accountings • {today}</div>
+        </div>
+        <div className="bill-actions">
+          <button className="btn btn-ghost" style={{flex:1,justifyContent:"center"}} onClick={onClose}>Close</button>
+          <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={handlePrint}><Icon name="print" size={14}/> Print / Save PDF</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── EXPENSES PAGE ────────────────────────────────────────────────────────────
+function ExpensesPage({ expenses, totalPaid, onAdd, onEdit, onDelete }) {
+  const [filterCat, setFilterCat] = useState("all");
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const expenseMonths = [...new Set(expenses.map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const allCats = [...new Set([...DEFAULT_EXPENSE_CATEGORIES, ...expenses.map(e=>e.category)])].filter(Boolean);
+
+  const filtered = expenses.filter(e => {
+    if (filterCat!=="all" && e.category!==filterCat) return false;
+    if (filterMonth!=="all" && !e.date.startsWith(filterMonth)) return false;
+    if (search && !e.title.toLowerCase().includes(search.toLowerCase()) && !e.description?.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const totalAll    = expenses.reduce((s,e)=>s+e.amount,0);
+  const totalMonth  = expenses.filter(e=>e.date.startsWith(thisMonth())).reduce((s,e)=>s+e.amount,0);
+  const totalYear   = expenses.filter(e=>e.date.startsWith(thisYear())).reduce((s,e)=>s+e.amount,0);
+  const netProfit   = totalPaid - totalAll;
+
+  return (
+    <>
+      <div className="page-header"><div className="page-title">Expenses</div><div className="page-sub">Business Expense Management</div></div>
+
+      {/* Summary stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+        {[
+          ["This Month",    inr(totalMonth),  "var(--red)"],
+          ["This Year",     inr(totalYear),   "var(--purple)"],
+          ["All Time",      inr(totalAll),    "var(--text2)"],
+          ["Net Profit",    inr(netProfit),   netProfit>=0?"var(--green)":"var(--red)"],
+        ].map(([lb,val,col])=>(
+          <div key={lb} className="stat-card">
+            <div className="stat-label">{lb}</div>
+            <div className="stat-value" style={{color:col,fontSize:17}}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="top-actions">
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",flex:1}}>
+          <input className="search-input" style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 13px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:13,outline:"none",minWidth:160}} placeholder="Search expenses…" value={search} onChange={e=>setSearch(e.target.value)}/>
+          <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 28px 9px 12px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:13,outline:"none",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+            <option value="all">All Categories</option>
+            {allCats.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 28px 9px 12px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:13,outline:"none",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+            <option value="all">All Months</option>
+            {expenseMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-danger" style={{background:"rgba(224,80,80,0.12)",borderColor:"rgba(224,80,80,0.3)"}} onClick={onAdd}><Icon name="plus" size={14}/> Add Expense</button>
+      </div>
+
+      {/* Desktop table */}
+      <div className="data-table expenses-table">
+        {filtered.length===0 ? <div className="tbl-empty">{expenses.length===0?"No expenses recorded yet.":"No results matching filters."}</div> : (
+          <div className="data-table-scroll">
+            <table>
+              <thead><tr><th>Date</th><th>Title</th><th>Category</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+              <tbody>
+                {filtered.map(e=>(
+                  <tr key={e.id}>
+                    <td className="mono" style={{fontSize:12,color:"var(--text2)",whiteSpace:"nowrap"}}>{fmtDate(e.date)}</td>
+                    <td style={{fontWeight:600}}>{e.title}</td>
+                    <td><span className="cat-tag">{e.category}</span></td>
+                    <td style={{color:"var(--text2)",fontSize:13,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.description||<span style={{color:"var(--text3)"}}>—</span>}</td>
+                    <td className="expense-cell">{inr(e.amount)}</td>
+                    <td>
+                      <div style={{display:"flex",gap:4}}>
+                        <button className="icon-btn icon-btn-edit" onClick={()=>onEdit(e)}><Icon name="edit" size={13}/></button>
+                        <button className="icon-btn" onClick={()=>onDelete(e.id)}><Icon name="trash" size={13}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile cards */}
+      <div className="card-list">
+        {filtered.length===0 && <div style={{textAlign:"center",padding:"32px 0",color:"var(--text3)",fontSize:14}}>{expenses.length===0?"No expenses yet. Tap 'Add Expense' to begin.":"No results matching filters."}</div>}
+        {filtered.map(e=>(
+          <div key={e.id} className="entry-card">
+            <div className="entry-card-top">
+              <span className="entry-card-date">{fmtDate(e.date)}</span>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span className="entry-card-amount red">{inr(e.amount)}</span>
+                <button className="icon-btn icon-btn-edit" onClick={()=>onEdit(e)}><Icon name="edit" size={13}/></button>
+                <button className="icon-btn" onClick={()=>onDelete(e.id)}><Icon name="trash" size={13}/></button>
+              </div>
+            </div>
+            <div className="entry-card-meta">
+              <span style={{fontWeight:700,fontSize:14,color:"var(--text)"}}>{e.title}</span>
+              <span className="cat-tag">{e.category}</span>
+            </div>
+            {e.description && <div style={{fontSize:13,color:"var(--text2)",marginTop:4}}>{e.description}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Filtered total */}
+      {filtered.length>0 && (
+        <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:"var(--radius2)",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
+          <span style={{fontSize:13,color:"var(--text2)",fontWeight:600}}>{filtered.length} expense{filtered.length!==1?"s":""} shown</span>
+          <span style={{fontSize:18,fontWeight:700,color:"var(--red)",fontFamily:"IBM Plex Mono"}}>{inr(filtered.reduce((s,e)=>s+e.amount,0))}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── ANALYTICS PAGE ───────────────────────────────────────────────────────────
+const PIE_COLORS = ["#f0a500","#50c080","#5090e0","#e05090","#a050e0","#50d0e0","#e07030","#80c050"];
+
+function AnalyticsPage({ customers, expenses, totalWork, totalPaid, balance }) {
+  const [selCust, setSelCust] = useState("all");
+  const totalRevenue  = customers.reduce((s,c)=>s+totalWork(c),0);
+  const totalPayments = customers.reduce((s,c)=>s+totalPaid(c),0);
+  const totalPending  = customers.reduce((s,c)=>s+Math.max(0,balance(c)),0);
+  const totalExpenses = expenses.reduce((s,e)=>s+e.amount,0);
+  const netProfit     = totalPayments - totalExpenses;
+  const custRevenues  = [...customers].sort((a,b)=>totalWork(b)-totalWork(a));
+
+  const monthlyMap = {};
+  customers.forEach(c=>{(c.entries||[]).forEach(e=>{const mo=e.date.slice(0,7); monthlyMap[mo]=(monthlyMap[mo]||0)+e.amount;});});
+  const expMonthlyMap = {};
+  expenses.forEach(e=>{const mo=e.date.slice(0,7); expMonthlyMap[mo]=(expMonthlyMap[mo]||0)+e.amount;});
+  const allMonths = [...new Set([...Object.keys(monthlyMap),...Object.keys(expMonthlyMap)])].sort();
+  const monthlyData = allMonths.map(m=>({month:m,rev:monthlyMap[m]||0,exp:expMonthlyMap[m]||0}));
+
+  const custMonthlyMap = {};
+  if (selCust!=="all") {
+    const c = customers.find(x=>x.id===selCust);
+    if (c) (c.entries||[]).forEach(e=>{const mo=e.date.slice(0,7); custMonthlyMap[mo]=(custMonthlyMap[mo]||0)+e.amount;});
+  }
+  const custMonthlyData = Object.entries(custMonthlyMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>({month:k,rev:v}));
+  const topCust = custRevenues[0];
+  const maxRev = topCust ? totalWork(topCust) : 1;
+  const maxMo  = monthlyData.length ? Math.max(...monthlyData.map(x=>Math.max(x.rev,x.exp))) : 1;
+
+  // Expense by category
+  const catMap = {};
+  expenses.forEach(e=>{ catMap[e.category]=(catMap[e.category]||0)+e.amount; });
+  const catData = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+
+  return (
+    <>
+      <div className="page-header"><div className="page-title">Analytics</div><div className="page-sub">Business Performance Overview</div></div>
+
+      {/* Profit summary */}
+      <div className="profit-summary">
+        <div className="profit-card profit-card-income">
+          <div className="profit-card-label" style={{color:"var(--green)"}}>Total Customer Income</div>
+          <div className="profit-card-value" style={{color:"var(--green)"}}>{inr(totalPayments)}</div>
+          <div className="profit-card-sub">Payments received</div>
+        </div>
+        <div className="profit-card profit-card-expense">
+          <div className="profit-card-label" style={{color:"var(--red)"}}>Total Expenses</div>
+          <div className="profit-card-value" style={{color:"var(--red)"}}>{inr(totalExpenses)}</div>
+          <div className="profit-card-sub">{expenses.length} expense records</div>
+        </div>
+        <div className="profit-card profit-card-net">
+          <div className="profit-card-label" style={{color:"var(--accent)"}}>Net Profit</div>
+          <div className="profit-card-value" style={{color:netProfit>=0?"var(--accent)":"var(--red)"}}>{inr(netProfit)}</div>
+          <div className="profit-card-sub">Payments – Expenses</div>
+        </div>
+      </div>
+
+      <div className="analytics-overview">
+        {[["Total Customers",customers.length,"var(--blue)"],["Total Billed",inr(totalRevenue),"var(--accent)"],["Total Pending",inr(totalPending),"var(--red)"],["Net Profit",inr(netProfit),netProfit>=0?"var(--green)":"var(--red)"]].map(([lb,val,col])=>(
+          <div key={lb} className="stat-card">
+            <div className="stat-label">{lb}</div>
+            <div className="stat-value" style={{color:col,fontSize:18}}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {topCust && (
+        <div className="top-customer-card">
+          <div style={{color:"var(--accent)"}}><Icon name="trophy" size={38}/></div>
+          <div>
+            <div style={{fontSize:11,color:"var(--text3)",fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"IBM Plex Mono",marginBottom:4}}>Top Customer</div>
+            <div style={{fontSize:20,fontWeight:700}}>{topCust.name}</div>
+            <div style={{fontSize:26,fontWeight:700,color:"var(--accent)",fontFamily:"IBM Plex Mono",marginTop:2}}>{inr(totalWork(topCust))}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="chart-card">
+        <div className="chart-card-title"><Icon name="chart" size={14}/> Monthly Revenue vs Expenses</div>
+        {monthlyData.length===0 ? <div style={{color:"var(--text3)",fontSize:13}}>No data yet.</div> : (
+          <>
+            <div style={{display:"flex",gap:16,marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text2)"}}><div style={{width:10,height:10,borderRadius:2,background:"var(--blue)"}}/> Revenue</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text2)"}}><div style={{width:10,height:10,borderRadius:2,background:"var(--red)"}}/> Expenses</div>
+            </div>
+            <div className="bar-wrap">
+              {monthlyData.map(({month,rev,exp})=>(
+                <div key={month} style={{display:"flex",flexDirection:"column",gap:4,marginBottom:4}}>
+                  <div className="bar-label" style={{width:"auto",color:"var(--text3)",fontFamily:"IBM Plex Mono",fontSize:11}}>{fmtMonth(month)}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:72,fontSize:11,fontFamily:"IBM Plex Mono",color:"var(--blue)",textAlign:"right",flexShrink:0}}>{inr(rev)}</div>
+                    <div className="bar-track" style={{flex:1}}><div className="bar-fill" style={{width:maxMo>0?(rev/maxMo*100)+"%":"0%",background:"var(--blue)"}}/></div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:72,fontSize:11,fontFamily:"IBM Plex Mono",color:"var(--red)",textAlign:"right",flexShrink:0}}>{inr(exp)}</div>
+                    <div className="bar-track" style={{flex:1}}><div className="bar-fill" style={{width:maxMo>0?(exp/maxMo*100)+"%":"0%",background:"var(--red)"}}/></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="charts-2col" style={{marginBottom:16}}>
+        <div className="chart-card" style={{marginBottom:0}}>
+          <div className="chart-card-title"><Icon name="chart" size={14}/> Revenue by Customer</div>
+          {custRevenues.length===0 ? <div style={{color:"var(--text3)",fontSize:13}}>No data yet.</div> : (
+            <div className="bar-wrap">
+              {custRevenues.map((c,i)=>{
+                const rev=totalWork(c); const pct=maxRev>0?(rev/maxRev)*100:0;
+                return (<div key={c.id} className="bar-item"><div className="bar-label" title={c.name}>{c.name}</div><div className="bar-track"><div className="bar-fill" style={{width:pct+"%",background:PIE_COLORS[i%PIE_COLORS.length]}}/></div><div className="bar-val">{inr(rev)}</div></div>);
+              })}
+            </div>
+          )}
+        </div>
+        <div className="chart-card" style={{marginBottom:0}}>
+          <div className="chart-card-title"><Icon name="tag" size={14}/> Expenses by Category</div>
+          {catData.length===0 ? <div style={{color:"var(--text3)",fontSize:13}}>No expense data yet.</div> : (
+            <div className="bar-wrap">
+              {catData.map(([cat,amt],i)=>{
+                const maxCat=catData[0][1];
+                return (<div key={cat} className="bar-item"><div className="bar-label" title={cat}>{cat}</div><div className="bar-track"><div className="bar-fill" style={{width:(amt/maxCat*100)+"%",background:PIE_COLORS[(i+3)%PIE_COLORS.length]}}/></div><div className="bar-val">{inr(amt)}</div></div>);
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-card-title"><Icon name="users" size={14}/> Customer Monthly Performance</div>
+        <div style={{marginBottom:16}}>
+          <select value={selCust} onChange={e=>setSelCust(e.target.value)} style={{background:"var(--surface2)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"8px 32px 8px 12px",color:"var(--text)",fontSize:13,outline:"none",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 12px center"}}>
+            <option value="all">— Select a customer —</option>
+            {customers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        {selCust==="all" ? <div style={{color:"var(--text3)",fontSize:13}}>Select a customer above to view their monthly revenue breakdown.</div>
+          : custMonthlyData.length===0 ? <div style={{color:"var(--text3)",fontSize:13}}>No entries for this customer yet.</div>
+          : (
+            <div className="bar-wrap">
+              {custMonthlyData.map(({month,rev},i)=>{
+                const maxV=Math.max(...custMonthlyData.map(x=>x.rev));
+                return (<div key={month} className="bar-item"><div className="bar-label">{fmtMonth(month)}</div><div className="bar-track"><div className="bar-fill" style={{width:maxV>0?(rev/maxV*100)+"%":"0%",background:PIE_COLORS[i%PIE_COLORS.length]}}/></div><div className="bar-val">{inr(rev)}</div></div>);
+              })}
+            </div>
+          )}
+      </div>
+    </>
+  );
+}
+
+// ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
+function SettingsPage({ settings, onSave }) {
+  const [form, setForm] = useState({...settings});
+  const set = (k,v) => setForm(p=>({...p,[k]:parseFloat(v)||0}));
+  return (
+    <>
+      <div className="page-header"><div className="page-title">Settings</div><div className="page-sub">Default pricing — applies to new Laser entries only</div></div>
+      <div className="settings-grid">
+        <div className="settings-card">
+          <div className="settings-card-title"><Icon name="laser" size={15}/> Laser Sheet Pricing</div>
+          {[["price13","13 Sheet Price (₹)"],["price16","16 Sheet Price (₹)"],["paperPrice","Paper Price (₹/sheet)"]].map(([k,lb])=>(
+            <div key={k} className="settings-field"><label>{lb}</label><input type="number" value={form[k]} onChange={e=>set(k,e.target.value)}/></div>
+          ))}
+          <div className="settings-field"><label>Dot Price (₹/dot)</label><input type="number" step="0.001" value={form.dotPrice} onChange={e=>set("dotPrice",e.target.value)}/></div>
+        </div>
+        <div className="settings-card">
+          <div className="settings-card-title"><Icon name="cnc" size={15}/> CNC &amp; Custom Entries</div>
+          <div style={{padding:"14px",background:"var(--surface2)",borderRadius:"var(--radius)",fontSize:13,color:"var(--text2)",lineHeight:1.7,fontFamily:"IBM Plex Mono"}}>
+            CNC / Zircon and Custom Entry amounts are now entered <strong style={{color:"var(--text)"}}>manually</strong> per entry.<br/><br/>
+            No default prices needed here.
+          </div>
+          <div style={{marginTop:12,padding:"14px",background:"var(--surface2)",borderRadius:"var(--radius)",fontSize:12,color:"var(--text3)",lineHeight:1.6,fontFamily:"IBM Plex Mono"}}>
+            Changing laser prices only affects new entries. Existing entries are unchanged.
+          </div>
+        </div>
+      </div>
+      <div style={{marginTop:20,display:"flex",justifyContent:"flex-end"}}>
+        <button className="btn btn-primary" onClick={()=>onSave(form)}><Icon name="save" size={14}/> Save Settings</button>
+      </div>
+    </>
+  );
+}
+
+// ─── BACKUP PAGE ──────────────────────────────────────────────────────────────
+function BackupPage({ customers, expenses, settings, onRestore, showToast }) {
+  const [importStatus, setImportStatus] = useState(null);
+  const [importMsg, setImportMsg] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef();
+  const totalEntries  = customers.reduce((s,c)=>(c.entries||[]).length+s,0);
+  const totalPayments = customers.reduce((s,c)=>(c.payments||[]).length+s,0);
+
+  function exportJSON() {
+    const data = { exportedAt:new Date().toISOString(), version:"nova_v3", settings, customers, expenses };
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`nova-backup-${new Date().toISOString().split("T")[0]}.json`; a.click();
+    URL.revokeObjectURL(url); showToast("JSON backup downloaded!");
+  }
+  function exportCSV() {
+    const rows = [["Type","Customer/Title","Date","Category","Sheet Type","Details","Sheets","Dots","Amount","Notes"]];
+    customers.forEach(c=>{
+      (c.entries||[]).forEach(e=>rows.push(["Entry",c.name,e.date,"",e.sheetType,e.sheetType==="Custom"?e.description:e.sheetType==="Laser"?e.sheetSize:e.workType,e.sheets||"",e.dots||"",e.amount,""]));
+      (c.payments||[]).forEach(p=>rows.push(["Payment",c.name,p.date,"","","","","",p.amount,p.notes||""]));
+    });
+    expenses.forEach(e=>rows.push(["Expense",e.title,e.date,e.category,"","","","",e.amount,e.description||""]));
+    const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`nova-export-${new Date().toISOString().split("T")[0]}.csv`; a.click();
+    URL.revokeObjectURL(url); showToast("CSV exported!");
+  }
+  function processFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith(".json")) { setImportStatus("error"); setImportMsg("Please select a valid Nova JSON backup file (.json)"); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data.version || !data.customers) throw new Error("Invalid");
+        onRestore(data.customers, data.expenses||[], data.settings||settings);
+        setImportStatus("success");
+        setImportMsg(`Restored ${data.customers.length} customers & ${(data.expenses||[]).length} expenses from backup.`);
+      } catch { setImportStatus("error"); setImportMsg("Invalid backup file. Please use a Nova Accountings JSON backup."); }
+    };
+    reader.readAsText(file);
+  }
+  return (
+    <>
+      <div className="page-header"><div className="page-title">Backup &amp; Restore</div><div className="page-sub">Protect your data — export regularly</div></div>
+      <div className="backup-tip">
+        <div style={{color:"var(--blue)",flexShrink:0,marginTop:1}}><Icon name="shield" size={20}/></div>
+        <div className="backup-tip-text"><strong>Recommended:</strong> Export a JSON backup once a week. Save to Google Drive, WhatsApp yourself, or your phone gallery. Restore in one click if anything goes wrong.</div>
+      </div>
+      <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:"var(--radius2)",padding:"14px 20px",marginBottom:20,display:"flex",gap:28,flexWrap:"wrap"}}>
+        {[[customers.length,"Customers"],[totalEntries,"Work Entries"],[totalPayments,"Payments"],[expenses.length,"Expenses"]].map(([val,lb])=>(
+          <div key={lb} style={{display:"flex",alignItems:"baseline",gap:6}}>
+            <span style={{fontSize:20,fontWeight:700,color:"var(--accent)",fontFamily:"IBM Plex Mono"}}>{val}</span>
+            <span style={{fontSize:12,color:"var(--text3)"}}>{lb}</span>
+          </div>
+        ))}
+      </div>
+      <div className="backup-grid">
+        <div className="backup-card">
+          <div style={{color:"var(--accent)"}}><Icon name="download" size={22}/></div>
+          <div className="backup-card-title">Export JSON Backup</div>
+          <div className="backup-card-desc">Full backup of all customers, entries, payments, expenses and settings. Use to restore data. <strong style={{color:"var(--text)"}}>Save this file safely.</strong></div>
+          <button className="btn btn-primary" onClick={exportJSON} style={{width:"100%",justifyContent:"center"}}><Icon name="download" size={14}/> Download JSON Backup</button>
+          <div style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>nova-backup-{new Date().toISOString().split("T")[0]}.json</div>
+        </div>
+        <div className="backup-card">
+          <div style={{color:"var(--blue)"}}><Icon name="file" size={22}/></div>
+          <div className="backup-card-title">Export CSV / Excel</div>
+          <div className="backup-card-desc">All entries, payments and expenses as a spreadsheet. Open in Excel or Google Sheets. Includes expenses section.</div>
+          <button className="btn btn-ghost" onClick={exportCSV} style={{width:"100%",justifyContent:"center",borderColor:"var(--blue)",color:"var(--blue)"}}><Icon name="file" size={14}/> Download CSV / Excel</button>
+          <div style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>nova-export-{new Date().toISOString().split("T")[0]}.csv</div>
+        </div>
+      </div>
+      <div style={{marginTop:8,marginBottom:12}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:6}}>Restore from JSON Backup</div>
+        <div style={{fontSize:13,color:"var(--text3)",marginBottom:14}}>Select a previously downloaded Nova JSON backup. All current data will be replaced.</div>
+        {importStatus==="success" && <div className="success-banner" style={{marginBottom:14}}><Icon name="check" size={16}/> {importMsg}</div>}
+        {importStatus==="error" && <div style={{background:"rgba(224,80,80,0.08)",border:"1px solid rgba(224,80,80,0.2)",borderRadius:"var(--radius)",padding:"12px 16px",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"var(--red)",marginBottom:14}}>✕ {importMsg}</div>}
+        <div className={`import-drop ${dragging?"drag":""}`} onClick={()=>fileRef.current.click()} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);processFile(e.dataTransfer.files[0]);}}>
+          <div className="import-drop-icon"><Icon name="upload" size={32}/></div>
+          <div className="import-drop-text">Click to select backup file</div>
+          <div className="import-drop-sub">or drag and drop your .json backup here</div>
+          <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={e=>processFile(e.target.files[0])}/>
+        </div>
+      </div>
+      <div style={{background:"rgba(224,80,80,0.06)",border:"1px solid rgba(224,80,80,0.15)",borderRadius:"var(--radius)",padding:"12px 16px",fontSize:12,color:"var(--text3)",lineHeight:1.6,fontFamily:"IBM Plex Mono",marginTop:16}}>
+        ⚠ Restoring a backup will overwrite all current data. Export a fresh backup first to keep your current data safe.
+      </div>
+    </>
+  );
+}
+
+// ─── ADD CUSTOMER MODAL ───────────────────────────────────────────────────────
+function AddCustomerModal({ onClose, onAdd }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-header"><span className="modal-title">Add Customer</span><button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button></div>
+        <div className="modal-body">
+          <div className="field"><span className="field-label">Customer Name</span><input autoFocus type="text" placeholder="e.g. Rameshbhai" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onAdd(name)}/></div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={()=>onAdd(name)} disabled={!name.trim()}><Icon name="plus" size={13}/> Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD PAYMENT MODAL ────────────────────────────────────────────────────────
+function AddPaymentModal({ onClose, onAdd }) {
+  const [date, setDate] = useState(todayStr());
+  const [amount, setAmount] = useState("");
+  const [notes, setNotes] = useState("");
+  const amt = parseFloat(amount);
+  function handleSave() { if (!amt||amt<=0) return; onAdd({id:uid(),date,amount:amt,notes:notes.trim()}); }
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-header"><span className="modal-title"><Icon name="payment" size={15}/> Add Payment</span><button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button></div>
+        <div className="modal-body">
+          <div className="form-row">
+            <div className="field"><span className="field-label">Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+            <div className="field"><span className="field-label">Amount Paid (₹)</span><input autoFocus type="number" min="1" placeholder="e.g. 2000" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSave()}/></div>
+          </div>
+          <div className="field"><span className="field-label">Notes (Optional)</span><textarea placeholder="e.g. UPI, Cash, Bank Transfer…" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
+          {amt>0 && <div className="calc-preview"><div className="calc-row total"><span>Payment Amount</span><span style={{color:"var(--green)"}}>{inr(amt)}</span></div></div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-green" onClick={handleSave} disabled={!amt||amt<=0}><Icon name="save" size={13}/> Save Payment</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD ENTRY MODAL ──────────────────────────────────────────────────────────
+function AddEntryModal({ onClose, onAdd, settings }) {
+  const [date, setDate]           = useState(todayStr());
+  const [sheetType, setSheetType] = useState("Laser");
+
+  // ── Laser: combined 13" + 16" in one entry ──
+  const [s13sheets, setS13sheets] = useState("");
+  const [s13dots,   setS13dots]   = useState("");
+  const [s16sheets, setS16sheets] = useState("");
+  const [s16dots,   setS16dots]   = useState("");
+  const [paper, setPaper]         = useState(true);
+
+  // CNC fields — manual amount
+  const [workType,   setWorkType]   = useState("CNC");
+  const [cncSheets,  setCncSheets]  = useState("");
+  const [cncDots,    setCncDots]    = useState("");
+  const [cncAmount,  setCncAmount]  = useState("");
+
+  // Custom fields
+  const [description,  setDescription]  = useState("");
+  const [customAmount, setCustomAmount] = useState("");
+
+  // Parsed numbers
+  const s13N = parseFloat(s13sheets) || 0;
+  const s13D = parseFloat(s13dots)   || 0;
+  const s16N = parseFloat(s16sheets) || 0;
+  const s16D = parseFloat(s16dots)   || 0;
+  const cncSheetsN = parseFloat(cncSheets) || 0;
+  const cncDotsN   = parseFloat(cncDots)   || 0;
+  const cncAmtN    = parseFloat(cncAmount) || 0;
+  const customAmtN = parseFloat(customAmount) || 0;
+
+  // ── Laser combined calculation ──
+  const cost13sheets  = s13N * settings.price13;
+  const cost16sheets  = s16N * settings.price16;
+  const cost13dots    = s13D * settings.dotPrice;
+  const cost16dots    = s16D * settings.dotPrice;
+  const totalSheetCost = cost13sheets + cost16sheets;
+  const totalDotCost   = cost13dots + cost16dots;
+  const totalPaperCost = paper ? (s13N + s16N) * settings.paperPrice : 0;
+  const laserAmount    = totalSheetCost + totalDotCost + totalPaperCost;
+  const laserHasAny    = s13N > 0 || s16N > 0;
+
+  const canSave =
+    sheetType==="Laser"  ? laserHasAny :
+    sheetType==="CNC"    ? cncSheetsN > 0 && cncAmtN > 0 :
+    /* Custom */           description.trim().length > 0 && customAmtN > 0;
+
+  function handleSave() {
+    if (!canSave) return;
+    if (sheetType==="Laser") {
+      onAdd({
+        id: uid(), date, sheetType: "Laser",
+        // store both sizes
+        s13sheets: s13N, s13dots: s13D,
+        s16sheets: s16N, s16dots: s16D,
+        paper,
+        // legacy-compat fields for display
+        sheetSize: s13N > 0 && s16N > 0 ? "13+16" : s13N > 0 ? "13" : "16",
+        sheets: s13N + s16N,
+        dots:   s13D + s16D,
+        sheetCost: totalSheetCost, dotCost: totalDotCost, paperCost: totalPaperCost,
+        amount: laserAmount,
+      });
+    } else if (sheetType==="CNC") {
+      onAdd({ id:uid(), date, sheetType:"CNC", workType, sheets:cncSheetsN, dots:cncDotsN, amount:cncAmtN });
+    } else {
+      onAdd({ id:uid(), date, sheetType:"Custom", description:description.trim(), sheets:null, dots:null, paper:null, amount:customAmtN });
+    }
+  }
+
+  const TYPES = [
+    { key:"Laser",  icon:"laser",  label:"Laser Sheet" },
+    { key:"CNC",    icon:"cnc",    label:"CNC Sheet" },
+    { key:"Custom", icon:"custom", label:"Custom Entry" },
+  ];
+
+  // Inline section header style
+  const sectionHead = {
+    display:"flex", alignItems:"center", gap:8,
+    fontSize:11, fontWeight:700, color:"var(--text3)",
+    letterSpacing:"0.08em", textTransform:"uppercase",
+    fontFamily:"IBM Plex Mono", marginBottom:8,
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-header"><span className="modal-title">Add Work Entry</span><button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button></div>
+        <div className="modal-body">
+          <div className="field"><span className="field-label">Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+
+          <div className="field">
+            <span className="field-label">Entry Type</span>
+            <div className="radio-group">
+              {TYPES.map(t=>(
+                <label key={t.key} className={`radio-opt ${sheetType===t.key?"selected":""}`}>
+                  <input type="radio" checked={sheetType===t.key} onChange={()=>setSheetType(t.key)}/>
+                  <Icon name={t.icon} size={13}/> {t.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <hr className="divider"/>
+
+          {/* ── LASER — Combined 13" + 16" ── */}
+          {sheetType==="Laser" && (<>
+
+            {/* 13" block */}
+            <div style={{background:"rgba(240,165,0,0.05)",border:"1px solid rgba(240,165,0,0.2)",borderRadius:"var(--radius2)",padding:"14px 16px"}}>
+              <div style={sectionHead}>
+                <div style={{width:8,height:8,borderRadius:2,background:"var(--accent)"}}/>
+                13&quot; Sheet — ₹{settings.price13}/sheet
+              </div>
+              <div className="form-row">
+                <div className="field">
+                  <span className="field-label">Sheets</span>
+                  <input type="number" inputMode="numeric" placeholder="0" value={s13sheets} onChange={e=>setS13sheets(e.target.value)} onFocus={e=>e.target.select()}/>
+                </div>
+                <div className="field">
+                  <span className="field-label">Dots</span>
+                  <input type="number" inputMode="numeric" placeholder="0" step="100" value={s13dots} onChange={e=>setS13dots(e.target.value)} onFocus={e=>e.target.select()}/>
+                </div>
+              </div>
+              {s13N > 0 && (
+                <div style={{marginTop:8,fontSize:12,fontFamily:"IBM Plex Mono",color:"var(--text3)",display:"flex",gap:16,flexWrap:"wrap"}}>
+                  <span>Sheets: <span style={{color:"var(--accent)"}}>₹{cost13sheets.toFixed(0)}</span></span>
+                  {s13D>0 && <span>Dots: <span style={{color:"var(--accent)"}}>₹{cost13dots.toFixed(0)}</span></span>}
+                </div>
+              )}
+            </div>
+
+            {/* 16" block */}
+            <div style={{background:"rgba(80,144,224,0.05)",border:"1px solid rgba(80,144,224,0.2)",borderRadius:"var(--radius2)",padding:"14px 16px"}}>
+              <div style={sectionHead}>
+                <div style={{width:8,height:8,borderRadius:2,background:"var(--blue)"}}/>
+                16&quot; Sheet — ₹{settings.price16}/sheet
+              </div>
+              <div className="form-row">
+                <div className="field">
+                  <span className="field-label">Sheets</span>
+                  <input type="number" inputMode="numeric" placeholder="0" value={s16sheets} onChange={e=>setS16sheets(e.target.value)} onFocus={e=>e.target.select()}/>
+                </div>
+                <div className="field">
+                  <span className="field-label">Dots</span>
+                  <input type="number" inputMode="numeric" placeholder="0" step="100" value={s16dots} onChange={e=>setS16dots(e.target.value)} onFocus={e=>e.target.select()}/>
+                </div>
+              </div>
+              {s16N > 0 && (
+                <div style={{marginTop:8,fontSize:12,fontFamily:"IBM Plex Mono",color:"var(--text3)",display:"flex",gap:16,flexWrap:"wrap"}}>
+                  <span>Sheets: <span style={{color:"var(--blue)"}}>₹{cost16sheets.toFixed(0)}</span></span>
+                  {s16D>0 && <span>Dots: <span style={{color:"var(--blue)"}}>₹{cost16dots.toFixed(0)}</span></span>}
+                </div>
+              )}
+            </div>
+
+            {/* Paper */}
+            <div className="field"><span className="field-label">Paper Included?</span>
+              <div className="radio-group">
+                {[true,false].map(v=>(
+                  <label key={String(v)} className={`radio-opt ${paper===v?"selected":""}`}>
+                    <input type="radio" checked={paper===v} onChange={()=>setPaper(v)}/>{v?"Yes — ₹"+settings.paperPrice+"/sheet":"No"}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Live calc breakdown */}
+            <hr className="divider"/>
+            <div className="calc-preview">
+              <div className="calc-title">Calculation Breakdown</div>
+              {s13N>0 && <div className="calc-row"><span>13&quot; × {s13N} sheets</span><span>₹{cost13sheets.toFixed(2)}</span></div>}
+              {s16N>0 && <div className="calc-row"><span>16&quot; × {s16N} sheets</span><span>₹{cost16sheets.toFixed(2)}</span></div>}
+              {(s13D>0||s16D>0) && <div className="calc-row"><span>Dots ({s13D+s16D} total)</span><span>₹{totalDotCost.toFixed(2)}</span></div>}
+              {paper && (s13N>0||s16N>0) && <div className="calc-row"><span>Paper × {s13N+s16N} sheets</span><span>₹{totalPaperCost.toFixed(2)}</span></div>}
+              <div className="calc-row total"><span>Total Amount</span><span>{inr(laserAmount)}</span></div>
+            </div>
+          </>)}
+
+          {/* ── CNC (Manual Amount) ── */}
+          {sheetType==="CNC" && (<>
+            <div className="field"><span className="field-label">Work Type</span>
+              <div className="radio-group">
+                {["CNC","Zircon"].map(t=>(
+                  <label key={t} className={`radio-opt ${workType===t?"selected":""}`}>
+                    <input type="radio" checked={workType===t} onChange={()=>setWorkType(t)}/>{t}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="field"><span className="field-label">Sheets</span><input type="number" inputMode="numeric" placeholder="e.g. 2" value={cncSheets} onChange={e=>setCncSheets(e.target.value)} onFocus={e=>e.target.select()}/></div>
+              <div className="field"><span className="field-label">Dots (record only)</span><input type="number" inputMode="numeric" placeholder="e.g. 800" step="100" value={cncDots} onChange={e=>setCncDots(e.target.value)} onFocus={e=>e.target.select()}/></div>
+            </div>
+            <div className="field">
+              <span className="field-label">Amount (₹) — Manual Entry</span>
+              <input autoFocus type="number" inputMode="decimal" placeholder="Enter total amount manually" value={cncAmount} onChange={e=>setCncAmount(e.target.value)} onFocus={e=>e.target.select()}/>
+            </div>
+            {cncAmtN>0 && (
+              <div className="calc-preview">
+                <div className="calc-row total"><span>{workType} × {cncSheetsN || "?"} sheets</span><span>{inr(cncAmtN)}</span></div>
+              </div>
+            )}
+          </>)}
+
+          {/* ── CUSTOM ENTRY ── */}
+          {sheetType==="Custom" && (<>
+            <div style={{background:"rgba(80,144,224,0.06)",border:"1px solid rgba(80,144,224,0.15)",borderRadius:"var(--radius)",padding:"11px 14px",fontSize:13,color:"var(--blue)",marginBottom:4}}>
+              Use this for any work not covered by Laser or CNC sheets — design work, material supply, special jobs, etc.
+            </div>
+            <div className="field">
+              <span className="field-label">Work Description</span>
+              <textarea autoFocus placeholder="e.g. Design work, Material supply, Laser cutting for special order…" value={description} onChange={e=>setDescription(e.target.value)} style={{minHeight:80}}/>
+            </div>
+            <div className="field">
+              <span className="field-label">Amount (₹)</span>
+              <input type="number" inputMode="decimal" placeholder="Enter amount" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} onFocus={e=>e.target.select()}/>
+            </div>
+            {customAmtN>0 && (
+              <div className="calc-preview">
+                <div className="calc-row total"><span>Custom Entry Amount</span><span>{inr(customAmtN)}</span></div>
+              </div>
+            )}
+          </>)}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!canSave}><Icon name="save" size={13}/> Save Entry</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD / EDIT EXPENSE MODAL ────────────────────────────────────────────────
+function AddExpenseModal({ onClose, onSave, initial }) {
+  const isEdit = !!initial;
+  const [date, setDate]           = useState(initial?.date || todayStr());
+  const [title, setTitle]         = useState(initial?.title || "");
+  const [category, setCategory]   = useState(initial?.category || DEFAULT_EXPENSE_CATEGORIES[0]);
+  const [customCat, setCustomCat] = useState("");
+  const [showCustomCat, setShowCustomCat] = useState(false);
+  const [description, setDescription] = useState(initial?.description || "");
+  const [amount, setAmount]       = useState(initial?.amount ? String(initial.amount) : "");
+
+  const amt = parseFloat(amount) || 0;
+  const finalCat = showCustomCat ? customCat.trim() || category : category;
+  const canSave = title.trim().length > 0 && amt > 0 && finalCat.length > 0;
+
+  function handleSave() {
+    if (!canSave) return;
+    onSave({
+      id: initial?.id || uid(),
+      date, title: title.trim(),
+      category: finalCat,
+      description: description.trim(),
+      amount: amt,
+    });
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <span className="modal-title"><Icon name="wallet" size={15}/> {isEdit?"Edit Expense":"Add Expense"}</span>
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
+        </div>
+        <div className="modal-body">
+          <div className="form-row">
+            <div className="field"><span className="field-label">Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+            <div className="field"><span className="field-label">Amount (₹)</span><input autoFocus={!isEdit} type="number" inputMode="decimal" placeholder="e.g. 450" value={amount} onChange={e=>setAmount(e.target.value)} onFocus={e=>e.target.select()}/></div>
+          </div>
+          <div className="field"><span className="field-label">Expense Title</span><input type="text" placeholder="e.g. Electricity, Transport, Material" value={title} onChange={e=>setTitle(e.target.value)}/></div>
+          <div className="field">
+            <span className="field-label">Category</span>
+            {!showCustomCat ? (
+              <select value={category} onChange={e=>setCategory(e.target.value)}>
+                {DEFAULT_EXPENSE_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            ) : (
+              <input type="text" placeholder="Enter custom category…" value={customCat} onChange={e=>setCustomCat(e.target.value)}/>
+            )}
+            <button className="btn btn-ghost btn-sm" style={{alignSelf:"flex-start",marginTop:4}} onClick={()=>setShowCustomCat(p=>!p)}>
+              {showCustomCat?"← Use preset categories":"+ Create custom category"}
+            </button>
+          </div>
+          <div className="field"><span className="field-label">Description (Optional)</span><textarea placeholder="Details about this expense…" value={description} onChange={e=>setDescription(e.target.value)}/></div>
+          {amt>0 && (
+            <div className="calc-preview">
+              <div className="calc-row total"><span>Expense Amount</span><span style={{color:"var(--red)"}}>{inr(amt)}</span></div>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{background:"var(--red)",color:"#fff",borderColor:"var(--red)"}} onClick={handleSave} disabled={!canSave}><Icon name="save" size={13}/> {isEdit?"Update":"Save"} Expense</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MASS ENTRY PAGE (ADVANCED) ───────────────────────────────────────────────
+function calcRowAmount(row, settings) {
+  if (row.sheetType === "Laser") {
+    const n  = parseFloat(row.sheets) || 0;
+    const d  = parseFloat(row.dots)   || 0;
+    const sp = row.sheetSize === "13" ? settings.price13 : settings.price16;
+    return sp * n + d * settings.dotPrice + (row.paper ? settings.paperPrice * n : 0);
+  }
+  if (row.sheetType === "CNC") return parseFloat(row.cncAmount) || 0;
+  if (row.sheetType === "Custom") return parseFloat(row.customAmount) || 0;
+  return 0;
+}
+
+function makeRow(defaults = {}) {
+  return {
+    _id:          uid(),
+    custId:       "",
+    custName:     "",
+    sheetType:    "Laser",
+    sheetSize:    "13",
+    workType:     "CNC",
+    sheets:       "",
+    dots:         "",
+    paper:        true,
+    cncAmount:    "",
+    customAmount: "",
+    customDesc:   "",
+    amount:       0,
+    _err:         {},
+    ...defaults,
+  };
+}
+
+const DRAFT_KEY = "nova_mass_draft_v1";
+
+function MassEntryPage({ customers, settings, onSave, onAddCustomer }) {
+  const [date, setDate]       = useState(todayStr());
+  const [rows, setRows]       = useState(() => {
+    try { const d = JSON.parse(localStorage?.getItem?.(DRAFT_KEY)||"null"); return d?.rows||[makeRow()]; } catch { return [makeRow()]; }
+  });
+  const [undoStack, setUndo]  = useState([]);
+  const [selectedRows, setSel] = useState(new Set());
+  const [saveAnim, setSaveAnim] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [localCusts, setLocalCusts] = useState(customers);
+  const tableWrap = useRef();
+  const firstInput = useRef();
+
+  useEffect(() => setLocalCusts(customers), [customers]);
+
+  // Auto-draft save every 30s
+  useEffect(() => {
+    const t = setInterval(() => {
+      try { localStorage?.setItem?.(DRAFT_KEY, JSON.stringify({ rows, date })); setDraftSaved(true); setTimeout(()=>setDraftSaved(false), 1500); } catch {}
+    }, 30000);
+    return () => clearInterval(t);
+  }, [rows, date]);
+
+  // ── undo helpers ──
+  function snapshot() { setUndo(p => [...p.slice(-19), rows]); }
+
+  function undo() {
+    if (!undoStack.length) return;
+    setRows(undoStack[undoStack.length-1]);
+    setUndo(p => p.slice(0,-1));
+  }
+
+  // ── row update ──
+  function updRow(idx, patch) {
+    setRows(prev => {
+      const next = prev.map((r,i) => i!==idx ? r : { ...r, ...patch, _err:{} });
+      const r    = next[idx];
+      next[idx]  = { ...next[idx], amount: calcRowAmount(r, settings) };
+      return next;
+    });
+  }
+
+  function addRow(defaults) {
+    snapshot();
+    const r = makeRow(defaults);
+    setRows(p => [...p, r]);
+    setTimeout(() => {
+      const trs = tableWrap.current?.querySelectorAll("tbody tr");
+      if (trs?.length) { const inp = trs[trs.length-1].querySelector("input"); inp?.focus(); }
+    }, 40);
+  }
+
+  function insertRowAfter(idx) {
+    snapshot();
+    const copy = makeRow({ sheetType: rows[idx].sheetType, sheetSize: rows[idx].sheetSize, workType: rows[idx].workType, paper: rows[idx].paper });
+    setRows(p => { const n=[...p]; n.splice(idx+1,0,copy); return n; });
+  }
+
+  function dupRow(idx) {
+    snapshot();
+    const copy = { ...rows[idx], _id: uid(), _err: {} };
+    setRows(p => { const n=[...p]; n.splice(idx+1,0,copy); return n; });
+  }
+
+  function delRow(idx) {
+    snapshot();
+    setRows(p => p.length===1 ? [makeRow()] : p.filter((_,i)=>i!==idx));
+    setSel(s => { const n=new Set(s); n.delete(idx); return n; });
+  }
+
+  function delSelected() {
+    if (!selectedRows.size) return;
+    snapshot();
+    setRows(p => { const n=p.filter((_,i)=>!selectedRows.has(i)); return n.length?n:[makeRow()]; });
+    setSel(new Set());
+  }
+
+  function clearAll() {
+    snapshot();
+    setRows([makeRow()]);
+    setSel(new Set());
+  }
+
+  // ── customer helpers ──
+  // Pass localCusts directly so MassRowAdv always has the live list
+  function custOpts(q) {
+    const list = localCusts || [];
+    if (!q || !q.trim()) return list.slice(0, 10);
+    const lower = q.trim().toLowerCase();
+    return list.filter(c => c.name.toLowerCase().includes(lower)).slice(0, 10);
+  }
+
+  function createCust(name) {
+    const nc = onAddCustomer(name.trim());
+    if (!nc) return null;
+    setLocalCusts(p=>[...p,nc]);
+    return nc;
+  }
+
+  // ── keyboard global shortcuts ──
+  useEffect(() => {
+    function handler(e) {
+      if ((e.ctrlKey||e.metaKey) && e.key==="z") { e.preventDefault(); undo(); }
+      if ((e.ctrlKey||e.metaKey) && e.key==="Enter") { e.preventDefault(); handleSave(); }
+      if ((e.ctrlKey||e.metaKey) && e.key==="d" && selectedRows.size) { e.preventDefault(); selectedRows.forEach(i=>dupRow(i)); }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undoStack, rows, selectedRows]);
+
+  // ── row enter key → next row ──
+  function handleRowEnter(idx) {
+    if (idx === rows.length-1) addRow();
+    else {
+      setTimeout(()=>{
+        const trs = tableWrap.current?.querySelectorAll("tbody tr");
+        if (trs?.[idx+1]) { const inp=trs[idx+1].querySelector("input"); inp?.focus(); }
+      }, 20);
+    }
+  }
+
+  // ── save ──
+  function handleSave() {
+    let hasErr = false;
+    const validated = rows.map(r => {
+      const err = {};
+      if (!r.custId)                                        err.cust = true;
+      if (r.sheetType==="Laser"  && !(parseFloat(r.sheets)>0))  err.sheets = true;
+      if (r.sheetType==="CNC"    && !(parseFloat(r.cncAmount)>0)) err.amt = true;
+      if (r.sheetType==="Custom" && !(parseFloat(r.customAmount)>0)) err.amt = true;
+      if (Object.keys(err).length) hasErr = true;
+      return { ...r, _err: err };
+    });
+    if (hasErr) { setRows(validated); return; }
+
+    const toSave = rows.map(r => {
+      let entry;
+      const n = parseFloat(r.sheets)||0, d=parseFloat(r.dots)||0;
+      if (r.sheetType==="Laser") {
+        const sp = r.sheetSize==="13"?settings.price13:settings.price16;
+        entry = { id:uid(), date, sheetType:"Laser", sheetSize:r.sheetSize,
+          s13sheets:r.sheetSize==="13"?n:0, s13dots:r.sheetSize==="13"?d:0,
+          s16sheets:r.sheetSize==="16"?n:0, s16dots:r.sheetSize==="16"?d:0,
+          sheets:n, dots:d, paper:r.paper,
+          sheetCost:sp*n, dotCost:d*settings.dotPrice,
+          paperCost:r.paper?settings.paperPrice*n:0, amount:r.amount };
+      } else if (r.sheetType==="CNC") {
+        entry = { id:uid(), date, sheetType:"CNC", workType:r.workType, sheets:n, dots:d, amount:r.amount };
+      } else {
+        entry = { id:uid(), date, sheetType:"Custom", description:r.customDesc||"Custom", sheets:null, dots:null, paper:null, amount:r.amount };
+      }
+      return { customerId: r.custId, entry };
+    });
+
+    onSave(toSave);
+    setSaveAnim(true);
+    setTimeout(()=>setSaveAnim(false), 2000);
+    try { localStorage?.removeItem?.(DRAFT_KEY); } catch {}
+    setRows([makeRow()]);
+    setSel(new Set());
+    setUndo([]);
+  }
+
+  // ── derived stats ──
+  const validRows = rows.filter(r => r.custId && r.amount>0);
+  const totalAmt  = rows.reduce((s,r)=>s+(r.amount||0), 0);
+  const uniqueCusts = [...new Map(rows.filter(r=>r.custId).map(r=>[r.custId,r])).values()];
+  const custBreakdown = uniqueCusts.map(uc => ({
+    name: uc.custName,
+    amt:  rows.filter(r=>r.custId===uc.custId).reduce((s,r)=>s+(r.amount||0),0),
+    cnt:  rows.filter(r=>r.custId===uc.custId).length,
+  })).sort((a,b)=>b.amt-a.amt);
+  const errCount = rows.filter(r=>Object.keys(r._err).length>0).length;
+
+  const TYPES = ["Laser","CNC","Custom"];
+
+  return (
+    <div>
+      {/* ── Header ── */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:20}}>
+        <div>
+          <div className="page-title" style={{display:"flex",alignItems:"center",gap:10}}>
+            Daily Work Log
+            {saveAnim && <span style={{fontSize:13,fontWeight:600,color:"var(--green)",fontFamily:"IBM Plex Mono",animation:"fadeIn .2s"}}>✓ Saved!</span>}
+          </div>
+          <div className="page-sub">Add all jobs for the day in one screen · <span className="me-kbd">Ctrl+Enter</span> to save · <span className="me-kbd">Ctrl+Z</span> to undo</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {draftSaved && <span style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>Draft saved</span>}
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+            style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 13px",color:"var(--text)",fontFamily:"IBM Plex Mono",fontSize:13,outline:"none",cursor:"pointer"}}/>
+        </div>
+      </div>
+
+      {/* ── Error banner ── */}
+      {errCount>0 && (
+        <div style={{background:"rgba(224,80,80,0.08)",border:"1px solid rgba(224,80,80,0.2)",borderRadius:"var(--radius)",padding:"10px 14px",fontSize:13,color:"var(--red)",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+          <Icon name="x" size={14}/> {errCount} row{errCount>1?"s":""} have missing or invalid fields — fix them before saving.
+        </div>
+      )}
+
+      <div className="me-layout">
+        {/* ── Left: table ── */}
+        <div className="me-main">
+          {/* Toolbar */}
+          <div className="me-toolbar">
+            <button className="btn btn-primary btn-sm" onClick={()=>addRow()}><Icon name="plus" size={13}/> Add Row</button>
+            {selectedRows.size>0 && <>
+              <button className="btn btn-sm" style={{background:"rgba(80,144,224,0.12)",color:"var(--blue)",borderColor:"rgba(80,144,224,0.25)"}} onClick={()=>selectedRows.forEach(i=>dupRow(i))}>
+                <Icon name="file" size={12}/> Duplicate ({selectedRows.size})
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={delSelected}><Icon name="trash" size={12}/> Delete ({selectedRows.size})</button>
+            </>}
+            {undoStack.length>0 && (
+              <button className="btn btn-ghost btn-sm" onClick={undo}>
+                ↩ Undo <span className="me-kbd" style={{marginLeft:4}}>Ctrl+Z</span>
+              </button>
+            )}
+            <div style={{flex:1}}/>
+            <span style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>{rows.length} row{rows.length>1?"s":""}</span>
+            <button className="btn btn-ghost btn-sm" style={{color:"var(--red)",borderColor:"rgba(224,80,80,0.2)"}} onClick={clearAll}>Clear All</button>
+          </div>
+
+          {/* Table */}
+          <div className="me-table-wrap" ref={tableWrap}>
+            <table className="me-table">
+              <thead>
+                <tr>
+                  <th style={{width:32,paddingLeft:10}}>
+                    <input type="checkbox" style={{accentColor:"var(--accent)",cursor:"pointer"}}
+                      checked={selectedRows.size===rows.length && rows.length>0}
+                      onChange={e=>setSel(e.target.checked ? new Set(rows.map((_,i)=>i)) : new Set())}/>
+                  </th>
+                  <th style={{width:26}}>#</th>
+                  <th style={{minWidth:170}}>Customer</th>
+                  <th style={{width:108}}>Type</th>
+                  <th style={{width:108}}>Size / Work</th>
+                  <th style={{width:72}}>Sheets</th>
+                  <th style={{width:82}}>Dots</th>
+                  <th style={{width:70}}>Paper</th>
+                  <th style={{width:108}}>Amount</th>
+                  <th style={{width:80}}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <MassRowAdv
+                    key={row._id}
+                    row={row}
+                    idx={idx}
+                    selected={selectedRows.has(idx)}
+                    settings={settings}
+                    allCustomers={localCusts}
+                    onUpdate={p=>updRow(idx,p)}
+                    onSelectToggle={()=>setSel(s=>{const n=new Set(s); n.has(idx)?n.delete(idx):n.add(idx); return n;})}
+                    onDup={()=>dupRow(idx)}
+                    onDel={()=>delRow(idx)}
+                    onInsertAfter={()=>insertRowAfter(idx)}
+                    onEnter={()=>handleRowEnter(idx)}
+                    onCreateCust={createCust}
+                    isLast={idx===rows.length-1}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Quick-add row types */}
+          <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono",alignSelf:"center"}}>Quick add:</span>
+            {TYPES.map(t=>(
+              <button key={t} className="btn btn-ghost btn-sm" onClick={()=>addRow({sheetType:t})} style={{fontSize:11}}>
+                <Icon name={t==="Laser"?"laser":t==="CNC"?"cnc":"custom"} size={11}/> {t}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Save bar ── */}
+          <div className="me-save-bar">
+            <div className="me-save-stats">
+              <div className="me-save-stat">
+                <span className="me-save-stat-label">Rows</span>
+                <span className="me-save-stat-val" style={{color:"var(--blue)"}}>{rows.length}</span>
+              </div>
+              <div className="me-save-stat">
+                <span className="me-save-stat-label">Valid</span>
+                <span className="me-save-stat-val" style={{color:"var(--green)"}}>{validRows.length}</span>
+              </div>
+              <div className="me-save-stat">
+                <span className="me-save-stat-label">Customers</span>
+                <span className="me-save-stat-val" style={{color:"var(--purple)"}}>{uniqueCusts.length}</span>
+              </div>
+              <div className="me-save-stat">
+                <span className="me-save-stat-label">Total</span>
+                <span className="me-save-stat-val" style={{color:"var(--accent)"}}>{inr(totalAmt)}</span>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono",whiteSpace:"nowrap"}}>
+                <span className="me-kbd">Ctrl</span>+<span className="me-kbd">Enter</span>
+              </span>
+              <button className="btn btn-primary" style={{fontSize:14,padding:"12px 28px"}} onClick={handleSave}
+                disabled={validRows.length===0}>
+                <Icon name="save" size={15}/> Save {validRows.length>0?`${validRows.length} `:""}Entr{validRows.length===1?"y":"ies"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right: sidebar ── */}
+        <div className="me-sidebar">
+          {/* Live preview by customer */}
+          <div className="me-sidebar-card">
+            <div className="me-sidebar-title">Customer Breakdown</div>
+            {custBreakdown.length===0
+              ? <div style={{fontSize:12,color:"var(--text3)"}}>No customers selected yet.</div>
+              : <div className="me-cust-breakdown">
+                  {custBreakdown.map(c=>(
+                    <div key={c.name} className="me-cust-row">
+                      <div className="me-cust-row-name">{c.name}</div>
+                      <div style={{display:"flex",alignItems:"center"}}>
+                        <span className="me-cust-row-amt">{inr(c.amt)}</span>
+                        <span className="me-cust-row-cnt">×{c.cnt}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"8px 10px 0",borderTop:`1px solid var(--border)`,marginTop:4}}>
+                    <span style={{fontSize:12,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>Total</span>
+                    <span style={{fontSize:14,fontWeight:700,color:"var(--accent)",fontFamily:"IBM Plex Mono"}}>{inr(totalAmt)}</span>
+                  </div>
+                </div>
+            }
+          </div>
+
+          {/* Type breakdown */}
+          <div className="me-sidebar-card">
+            <div className="me-sidebar-title">Entry Breakdown</div>
+            {[
+              ["Laser", rows.filter(r=>r.sheetType==="Laser"), "var(--accent)"],
+              ["CNC",   rows.filter(r=>r.sheetType==="CNC"),   "var(--green)"],
+              ["Custom",rows.filter(r=>r.sheetType==="Custom"),"var(--blue)"],
+            ].map(([t,rs,col])=> rs.length>0 && (
+              <div key={t} className="me-stat">
+                <span className="me-stat-label">{t} entries</span>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1}}>
+                  <span className="me-stat-val" style={{color:col}}>{inr(rs.reduce((s,r)=>s+(r.amount||0),0))}</span>
+                  <span style={{fontSize:10,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>×{rs.length}</span>
+                </div>
+              </div>
+            ))}
+            {rows.every(r=>r.amount===0) && <div style={{fontSize:12,color:"var(--text3)"}}>Fill in entries to see breakdown.</div>}
+          </div>
+
+          {/* Keyboard shortcuts */}
+          <div className="me-sidebar-card">
+            <div className="me-sidebar-title">Keyboard Shortcuts</div>
+            {[
+              ["Tab","Next field"],
+              ["Enter","Next row"],
+              ["Ctrl+Enter","Save all"],
+              ["Ctrl+Z","Undo"],
+              ["Ctrl+D","Duplicate selected"],
+            ].map(([k,v])=>(
+              <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid var(--border)"}}>
+                <span className="me-kbd">{k}</span>
+                <span style={{fontSize:11,color:"var(--text3)"}}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Advanced Mass Row ──────────────────────────────────────────────────────────
+function MassRowAdv({ row, idx, selected, settings, allCustomers, onUpdate, onSelectToggle, onDup, onDel, onInsertAfter, onEnter, onCreateCust, isLast }) {
+  const [custQ,    setCustQ]    = useState(row.custName || "");
+  const [dropOpen, setDropOpen] = useState(false);
+  const [hiIdx,    setHiIdx]    = useState(0);
+  const wrapRef    = useRef();
+  const inputRef   = useRef();
+
+  // Keep local query in sync if parent clears the customer
+  useEffect(() => {
+    if (!row.custId) setCustQ("");
+    else if (row.custName && row.custName !== custQ) setCustQ(row.custName);
+  }, [row.custId, row.custName]);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setDropOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Compute filtered list fresh every render from allCustomers
+  const filteredCusts = (() => {
+    const q = custQ.trim().toLowerCase();
+    if (!q) return (allCustomers || []).slice(0, 10);
+    return (allCustomers || [])
+      .filter(c => c.name.toLowerCase().includes(q))
+      .slice(0, 10);
+  })();
+
+  const exactMatch  = filteredCusts.find(c => c.name.toLowerCase() === custQ.trim().toLowerCase());
+  const canCreate   = custQ.trim().length > 0 && !exactMatch;
+  const totalOpts   = filteredCusts.length + (canCreate ? 1 : 0);
+
+  // Highlight first result when query changes
+  useEffect(() => { setHiIdx(0); }, [custQ]);
+
+  function pickCust(c) {
+    setCustQ(c.name);
+    setDropOpen(false);
+    setHiIdx(0);
+    onUpdate({ custId: c.id, custName: c.name });
+    // move focus to next input
+    setTimeout(() => {
+      const row = wrapRef.current?.closest("tr");
+      const inputs = row?.querySelectorAll("input,select");
+      if (inputs) {
+        const arr = Array.from(inputs);
+        const myIdx = arr.findIndex(el => el === inputRef.current);
+        if (myIdx >= 0 && arr[myIdx + 1]) arr[myIdx + 1].focus();
+      }
+    }, 30);
+  }
+
+  function doCreateCust() {
+    const name = custQ.trim();
+    if (!name) return;
+    const nc = onCreateCust(name);
+    if (!nc) return;
+    setCustQ(nc.name);
+    setDropOpen(false);
+    onUpdate({ custId: nc.id, custName: nc.name });
+  }
+
+  function clearCust() {
+    onUpdate({ custId: "", custName: "" });
+    setCustQ("");
+    setDropOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 20);
+  }
+
+  function handleInputChange(e) {
+    const val = e.target.value;
+    setCustQ(val);
+    setDropOpen(true);
+    setHiIdx(0);
+    // clear selection if user is re-typing
+    if (row.custId) onUpdate({ custId: "", custName: "" });
+  }
+
+  function handleInputFocus() {
+    setDropOpen(true);
+    setHiIdx(0);
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setDropOpen(true);
+      setHiIdx(h => Math.min(h + 1, totalOpts - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHiIdx(h => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (dropOpen) {
+        if (hiIdx < filteredCusts.length) pickCust(filteredCusts[hiIdx]);
+        else if (canCreate) doCreateCust();
+      }
+    } else if (e.key === "Escape") {
+      setDropOpen(false);
+    } else if (e.key === "Tab") {
+      setDropOpen(false);
+      // if something highlighted, select it
+      if (dropOpen && hiIdx < filteredCusts.length) pickCust(filteredCusts[hiIdx]);
+    }
+  }
+
+  function handleLastFieldEnter(e) {
+    if (e.key === "Enter") { e.preventDefault(); onEnter(); }
+  }
+
+  const hasErr  = Object.keys(row._err || {}).length > 0;
+  const rowDone = !hasErr && row.custId && row.amount > 0;
+  const rowCls  = hasErr ? "me-row-error" : rowDone ? "me-row-done" : "";
+
+  return (
+    <tr className={`${rowCls} ${selected ? "me-row-selected" : ""}`} data-idx={idx}>
+
+      {/* Checkbox */}
+      <td style={{ paddingLeft: 10, width: 32 }}>
+        <input type="checkbox" style={{ accentColor: "var(--accent)", cursor: "pointer" }}
+          checked={selected} onChange={onSelectToggle} />
+      </td>
+
+      {/* Row # */}
+      <td><div className="me-row-num">{idx + 1}</div></td>
+
+      {/* ── Customer ── */}
+      <td>
+        <div className="me-cust-wrap" ref={wrapRef} style={{ minWidth: 160 }}>
+          {/* Show chip when selected, input when not */}
+          {row.custId ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}
+              onClick={clearCust}>
+              <span className="me-cust-chip">{row.custName}</span>
+              <span style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1 }}>✕</span>
+            </div>
+          ) : (
+            <input
+              ref={inputRef}
+              className={`mc-in ${row._err?.cust ? "err" : ""}`}
+              type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="Type to search…"
+              value={custQ}
+              onChange={handleInputChange}
+              onFocus={handleInputFocus}
+              onKeyDown={handleKeyDown}
+              style={{ fontSize: 13, minWidth: 150 }}
+            />
+          )}
+
+          {/* Dropdown */}
+          {dropOpen && !row.custId && (
+            <div className="me-cust-drop">
+              {filteredCusts.length === 0 && !canCreate && (
+                <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text3)" }}>
+                  No customers found
+                </div>
+              )}
+              {filteredCusts.map((c, i) => (
+                <div
+                  key={c.id}
+                  className={`me-cust-opt ${i === hiIdx ? "active" : ""}`}
+                  onMouseDown={e => { e.preventDefault(); pickCust(c); }}
+                  onMouseEnter={() => setHiIdx(i)}
+                >
+                  <span style={{ flex: 1, fontWeight: 500 }}>{c.name}</span>
+                  {/* highlight matching part */}
+                  {custQ.trim() && (() => {
+                    const idx2 = c.name.toLowerCase().indexOf(custQ.trim().toLowerCase());
+                    if (idx2 < 0) return null;
+                    return (
+                      <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 6 }}>
+                        match
+                      </span>
+                    );
+                  })()}
+                </div>
+              ))}
+              {canCreate && (
+                <div
+                  className={`me-cust-opt create-new ${hiIdx === filteredCusts.length ? "active" : ""}`}
+                  onMouseDown={e => { e.preventDefault(); doCreateCust(); }}
+                  onMouseEnter={() => setHiIdx(filteredCusts.length)}
+                >
+                  <Icon name="plus" size={11} />
+                  <span style={{ marginLeft: 4 }}>Create "{custQ.trim()}"</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </td>
+
+      {/* Type */}
+      <td>
+        <select className="mc-sel" value={row.sheetType}
+          onChange={e => onUpdate({ sheetType: e.target.value })}>
+          <option value="Laser">⚡ Laser</option>
+          <option value="CNC">🖥 CNC</option>
+          <option value="Custom">📄 Custom</option>
+        </select>
+      </td>
+
+      {/* Size / work type */}
+      <td>
+        {row.sheetType === "Laser" && (
+          <select className="mc-sel" value={row.sheetSize}
+            onChange={e => onUpdate({ sheetSize: e.target.value })}>
+            <option value="13">13″ ₹{settings.price13}</option>
+            <option value="16">16″ ₹{settings.price16}</option>
+          </select>
+        )}
+        {row.sheetType === "CNC" && (
+          <select className="mc-sel" value={row.workType}
+            onChange={e => onUpdate({ workType: e.target.value })}>
+            <option value="CNC">CNC</option>
+            <option value="Zircon">Zircon</option>
+          </select>
+        )}
+        {row.sheetType === "Custom" && (
+          <input className="mc-in" placeholder="Description…"
+            value={row.customDesc || ""}
+            onChange={e => onUpdate({ customDesc: e.target.value })}
+            style={{ fontSize: 12 }} />
+        )}
+      </td>
+
+      {/* Sheets */}
+      <td>
+        {row.sheetType !== "Custom"
+          ? <input className={`mc-in ${row._err?.sheets ? "err" : ""}`}
+              type="number" inputMode="numeric" placeholder="0"
+              value={row.sheets}
+              onChange={e => onUpdate({ sheets: e.target.value })}
+              onFocus={e => e.target.select()}
+              style={{ width: 64, textAlign: "center" }} />
+          : <span style={{ fontSize: 11, color: "var(--text3)", padding: "0 8px", fontFamily: "IBM Plex Mono" }}>—</span>
+        }
+      </td>
+
+      {/* Dots */}
+      <td>
+        {row.sheetType !== "Custom"
+          ? <input className="mc-in"
+              type="number" inputMode="numeric" placeholder="0" step="100"
+              value={row.dots}
+              onChange={e => onUpdate({ dots: e.target.value })}
+              onFocus={e => e.target.select()}
+              style={{ width: 74, textAlign: "center" }} />
+          : <span style={{ fontSize: 11, color: "var(--text3)", padding: "0 8px", fontFamily: "IBM Plex Mono" }}>—</span>
+        }
+      </td>
+
+      {/* Paper */}
+      <td>
+        {row.sheetType === "Laser"
+          ? <button className={`me-paper-btn ${row.paper ? "on" : "off"}`}
+              onClick={() => onUpdate({ paper: !row.paper })}>
+              {row.paper ? <><Icon name="check" size={10} /> Y</> : "N"}
+            </button>
+          : <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "IBM Plex Mono", padding: "0 6px" }}>—</span>
+        }
+      </td>
+
+      {/* Amount */}
+      <td>
+        {row.sheetType === "CNC" || row.sheetType === "Custom"
+          ? <input className={`mc-in ${row._err?.amt ? "err" : ""}`}
+              type="number" inputMode="decimal" placeholder="₹ manual"
+              value={row.sheetType === "CNC" ? row.cncAmount : row.customAmount}
+              onChange={e => onUpdate(row.sheetType === "CNC"
+                ? { cncAmount: e.target.value }
+                : { customAmount: e.target.value })}
+              onFocus={e => e.target.select()}
+              onKeyDown={handleLastFieldEnter}
+              style={{ width: 96, fontFamily: "IBM Plex Mono", fontWeight: 600, fontSize: 13 }} />
+          : <div className={`me-amount-display ${row.amount > 0 ? "filled" : "zero"}`}>
+              {row.amount > 0 ? inr(row.amount) : "—"}
+            </div>
+        }
+      </td>
+
+      {/* Actions */}
+      <td>
+        <div className="me-row-actions">
+          <button className="me-icon-btn" title="Insert row below" onClick={onInsertAfter}><Icon name="plus" size={11} /></button>
+          <button className="me-icon-btn" title="Duplicate row" onClick={onDup}><Icon name="file" size={11} /></button>
+          <button className="me-icon-btn del" title="Delete row" onClick={onDel}><Icon name="trash" size={11} /></button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─── PASSWORD MODAL ───────────────────────────────────────────────────────────
+function PasswordModal({ label, onClose, onConfirm }) {
+  const [pw, setPw]       = useState("");
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
+  function handleConfirm() {
+    if (pw==="123456") { onConfirm(); }
+    else { setError(true); setShake(true); setPw(""); setTimeout(()=>setShake(false),500); }
+  }
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:380}}>
+        <div className="modal-header">
+          <span className="modal-title"><Icon name="lock" size={15}/> Confirm Delete</span>
+          <button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button>
+        </div>
+        <div className="modal-body">
+          <div style={{background:"rgba(224,80,80,0.08)",border:"1px solid rgba(224,80,80,0.2)",borderRadius:"var(--radius)",padding:"12px 14px",fontSize:13,color:"var(--text2)",lineHeight:1.5}}>{label}</div>
+          <div className="field">
+            <span className="field-label">Enter Password</span>
+            <input autoFocus type="password" placeholder="••••••" value={pw} onChange={e=>{setPw(e.target.value);setError(false);}} onKeyDown={e=>e.key==="Enter"&&handleConfirm()}
+              style={{border:error?"1px solid var(--red)":undefined,animation:shake?"shake 0.4s ease":undefined}}/>
+            {error && <span style={{fontSize:12,color:"var(--red)",marginTop:2}}>✕ Incorrect password. Try again.</span>}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{background:"var(--red)",color:"#fff",borderColor:"var(--red)"}} onClick={handleConfirm}><Icon name="trash" size={13}/> Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
