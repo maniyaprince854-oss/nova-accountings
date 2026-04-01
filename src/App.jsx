@@ -72,33 +72,42 @@ const style = `
     --bottom-nav-h:64px;
     --dash-h:72px;
   }
-  [data-theme="day"] {
-    --bg:#f0eeea; --surface:#ffffff; --surface2:#e9e6e1; --surface3:#dedad4;
-    --border:#ccc8c2; --border2:#b8b4ae;
+  body.day-mode {
+    --bg:#f0eeea; --surface:#ffffff; --surface2:#e8e5e0; --surface3:#dedad4;
+    --border:#c8c4be; --border2:#b4b0aa;
     --text:#111111; --text2:#4a4a47; --text3:#888480;
     --accent:#b86e00; --accent2:#a06000; --accent-dim:rgba(184,110,0,0.12);
-    --red:#b83030; --green:#1e8050; --blue:#1a64b8; --purple:#6830b0;
+    --red:#b83030; --green:#1a7a48; --blue:#1a5cb0; --purple:#6030a8;
+    background: #f0eeea !important;
+    color: #111111;
   }
-  [data-theme="day"] body { background:var(--bg); }
-  [data-theme="day"] .me-table th { background:var(--surface2) !important; color:var(--text3); }
-  [data-theme="day"] .me-table tbody tr:hover td { background:rgba(0,0,0,0.035) !important; }
-  [data-theme="day"] .me-table tbody tr.me-row-selected td { background:rgba(184,110,0,0.08) !important; }
-  [data-theme="day"] .me-table tbody tr.me-row-done td { background:rgba(30,128,80,0.07) !important; }
-  [data-theme="day"] .me-table tbody tr.me-row-error td { background:rgba(184,48,48,0.06) !important; }
-  [data-theme="day"] .me-cust-drop { box-shadow:0 8px 24px rgba(0,0,0,0.12); }
-  [data-theme="day"] .me-save-bar { box-shadow:0 -4px 20px rgba(0,0,0,0.07); }
-  [data-theme="day"] .modal-overlay { background:rgba(0,0,0,0.50); }
-  [data-theme="day"] .me-undo-bar { background:rgba(26,100,184,0.07); border-color:rgba(26,100,184,0.2); }
-  [data-theme="day"] .top-customer-card { background:linear-gradient(135deg,rgba(184,110,0,0.08),rgba(184,110,0,0.02)); border-color:rgba(184,110,0,0.2); }
-  [data-theme="day"] .backup-tip { background:rgba(26,100,184,0.06); border-color:rgba(26,100,184,0.18); }
-  [data-theme="day"] .profit-card-income { background:rgba(30,128,80,0.07); }
-  [data-theme="day"] .profit-card-expense { background:rgba(184,48,48,0.06); }
-  [data-theme="day"] .profit-card-net { background:rgba(184,110,0,0.08); }
-  [data-theme="day"] .import-drop { border-color:var(--border2); background:var(--surface2); }
-  [data-theme="day"] .success-banner { background:rgba(30,128,80,0.08); border-color:rgba(30,128,80,0.22); }
-  [data-theme="day"] .mc-in.err { background:rgba(184,48,48,0.06); }
-  [data-theme="day"] .field select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888480' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
-  [data-theme="day"] .mc-sel { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='5' viewBox='0 0 9 5'%3E%3Cpath d='M1 1l3.5 3L8 1' stroke='%23888480' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
+  body.day-mode .me-table th { background:#e8e5e0 !important; color:#666260 !important; }
+  body.day-mode .me-table tbody tr:hover td { background:rgba(0,0,0,0.04) !important; }
+  body.day-mode .me-table tbody tr.me-row-selected td { background:rgba(184,110,0,0.09) !important; }
+  body.day-mode .me-table tbody tr.me-row-done td { background:rgba(26,122,72,0.07) !important; }
+  body.day-mode .me-table tbody tr.me-row-error td { background:rgba(184,48,48,0.06) !important; }
+  body.day-mode .me-cust-drop { box-shadow:0 8px 24px rgba(0,0,0,0.14) !important; background:#fff !important; }
+  body.day-mode .me-save-bar { box-shadow:0 -4px 20px rgba(0,0,0,0.08) !important; }
+  body.day-mode .modal-overlay { background:rgba(0,0,0,0.45) !important; }
+  body.day-mode .me-undo-bar { background:rgba(26,92,176,0.07) !important; border-color:rgba(26,92,176,0.22) !important; }
+  body.day-mode .top-customer-card { background:linear-gradient(135deg,rgba(184,110,0,0.09),rgba(184,110,0,0.02)) !important; border-color:rgba(184,110,0,0.22) !important; }
+  body.day-mode .backup-tip { background:rgba(26,92,176,0.07) !important; border-color:rgba(26,92,176,0.2) !important; }
+  body.day-mode .profit-card-income { background:rgba(26,122,72,0.08) !important; }
+  body.day-mode .profit-card-expense { background:rgba(184,48,48,0.07) !important; }
+  body.day-mode .profit-card-net { background:rgba(184,110,0,0.09) !important; }
+  body.day-mode .import-drop { border-color:#b4b0aa !important; background:#e8e5e0 !important; }
+  body.day-mode .success-banner { background:rgba(26,122,72,0.09) !important; border-color:rgba(26,122,72,0.25) !important; }
+  body.day-mode .mc-in.err { background:rgba(184,48,48,0.07) !important; }
+  body.day-mode .field select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888480' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+  body.day-mode .mc-sel { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='5' viewBox='0 0 9 5'%3E%3Cpath d='M1 1l3.5 3L8 1' stroke='%23888480' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+  body.day-mode .toast { background:var(--green); color:#fff; }
+  body.day-mode .modal { background:#ffffff; border-color:#c8c4be; }
+  body.day-mode .modal-header { background:#ffffff; border-color:#c8c4be; }
+  body.day-mode .modal-footer { background:#ffffff; border-color:#c8c4be; }
+  body.day-mode .bill-actions { background:#ffffff; border-color:#c8c4be; }
+  body.day-mode .bottom-nav { background:#ffffff; border-color:#c8c4be; }
+  body.day-mode .header { background:#ffffff; border-color:#c8c4be; }
+  body.day-mode .dash-bar { background:#ffffff; border-color:#c8c4be; }
   html { -webkit-text-size-adjust:100%; }
   body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; -webkit-tap-highlight-color:transparent; }
   .app { min-height:100vh; display:flex; flex-direction:column; }
@@ -547,7 +556,11 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem("nova_theme") || "night");
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "day") {
+      document.body.classList.add("day-mode");
+    } else {
+      document.body.classList.remove("day-mode");
+    }
     localStorage.setItem("nova_theme", theme);
   }, [theme]);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
