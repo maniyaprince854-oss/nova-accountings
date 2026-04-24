@@ -270,6 +270,7 @@ const style = `
 
   /* ── SETTINGS ── */
   .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .invoice-format-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .settings-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; }
   .settings-card-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
   .settings-field { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
@@ -361,6 +362,7 @@ const style = `
   .bill-sum-row.balance-ok { color:#1a7a3f; font-weight:700; }
   .bill-footer { text-align:center; font-size:11px; color:#aaa; font-family:'IBM Plex Mono',monospace; padding-top:20px; border-top:1px solid #eee; }
   .bill-actions { display:flex; gap:10px; padding:14px 20px; border-top:1px solid var(--border); background:var(--surface); position:sticky; bottom:0; }
+  .bill-table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 
   @media print {
     .modal-overlay, .bill-actions { display:none !important; }
@@ -533,6 +535,23 @@ const style = `
     .bar-label { width:72px; font-size:11px; }
     .settings-card { padding:16px; }
     .backup-card { padding:16px; }
+    .invoice-format-grid { grid-template-columns:1fr !important; }
+    .invoice-format-grid .settings-field[style] { grid-column:auto !important; }
+    .profit-card-value { font-size:20px; }
+    .profit-card { padding:14px 16px; }
+    .top-customer-card { flex-direction:column; align-items:flex-start; gap:8px; padding:14px 16px; }
+    .stat-value { font-size:15px; }
+    .bill-modal { border-radius:16px 16px 0 0; }
+    .bill-page { padding:18px 14px; }
+    .bill-header { flex-direction:column; gap:10px; }
+    .bill-meta { text-align:left; }
+    .bill-brand-name { font-size:17px; }
+    .bill-meta-title { font-size:15px; }
+    .bill-summary { width:100%; margin-left:0; }
+    .bill-actions { gap:8px; padding:12px 14px; }
+    .analytics-overview .stat-value { font-size:14px; }
+    .me-save-stats { gap:8px; }
+    .me-save-stat-val { font-size:13px; }
   }
 
   @media(max-width:400px) {
@@ -541,7 +560,10 @@ const style = `
     .theme-toggle .toggle-label { display:none; }
     .stats-row { grid-template-columns:1fr 1fr; gap:6px; }
     .analytics-overview { grid-template-columns:1fr 1fr; gap:6px; }
-    .main, .main.main-full { padding:12px 12px calc(var(--bottom-nav-h) + 20px); }
+    .main, .main.main-full { padding:12px 10px calc(var(--bottom-nav-h) + 20px); }
+    .bill-page { padding:14px 10px; }
+    .profit-card-value { font-size:17px; }
+    .stat-value { font-size:14px; }
   }
 `;
 
@@ -1078,7 +1100,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
           <div className="bill-to-name">{customer.name}</div>
           <div className="bill-to-period">Period: {periodLabel}</div>
           {billEntries.length===0 ? <div style={{textAlign:"center",padding:"32px 0",color:"#aaa",fontSize:14}}>No entries for this period.</div> : (
-            <table className="bill-table">
+            <div className="bill-table-scroll"><table className="bill-table">
               <thead><tr><th>Date</th><th>Type</th><th>Details</th><th className="num">Sheets</th><th className="num">Dots</th><th className="amt">Amount</th></tr></thead>
               <tbody>
                 {billEntries.map((e,i)=>(
@@ -1092,7 +1114,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <div className="bill-summary">
             <div className="bill-sum-row total"><span>Total Work</span><span>₹{billTotal.toLocaleString("en-IN",{minimumFractionDigits:2})}</span></div>
@@ -1411,7 +1433,7 @@ function SettingsPage({ settings, onSave }) {
         </div>
         <div className="settings-card" style={{gridColumn:"1 / -1"}}>
           <div className="settings-card-title"><Icon name="receipt" size={15}/> Invoice Format</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div className="invoice-format-grid">
             <div className="settings-field">
               <label>Business Name</label>
               <input type="text" value={form.businessName||""} placeholder="Nova Accountings" onChange={e=>setTxt("businessName",e.target.value)}/>
