@@ -1038,12 +1038,20 @@ function BillModal({ customer, billMonth, setBillMonth, totalPaid, balance, onCl
 
   function handlePrint() {
     const content = billRef.current.innerHTML;
-    const win = window.open("","_blank","width=700,height=900");
-    win.document.write(`<!DOCTYPE html><html><head><title>Bill - ${customer.name}</title>
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:-9999px;top:0;width:700px;height:900px;border:0;";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><title>Invoice - ${customer.name}</title>
     <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;color:#111;padding:32px 36px;}table{width:100%;border-collapse:collapse;}th{padding:8px 10px;background:#f5f5f5;border-bottom:1px solid #ddd;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#555;text-align:left;}td{padding:9px 10px;border-bottom:1px solid #eee;font-size:12px;color:#222;vertical-align:middle;}tr:last-child td{border-bottom:none;}.amt,.num{text-align:right;font-family:monospace;}</style>
     </head><body>${content}</body></html>`);
-    win.document.close(); win.focus();
-    setTimeout(()=>{ win.print(); win.close(); }, 400);
+    doc.close();
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
+    }, 500);
   }
 
   return (
