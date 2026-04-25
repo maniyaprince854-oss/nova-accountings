@@ -637,10 +637,14 @@ export default function App() {
   const globalTotalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const globalNetProfit     = globalTotalPaid - globalTotalExpenses;
 
-  function addCustomer(name) {
+  function addCustomer(name, phone) {
     const t = name.trim(); if (!t) return;
-    setCustomers(p => [...p, { id: uid(), name: t, entries: [], payments: [] }]);
+    setCustomers(p => [...p, { id: uid(), name: t, phone: phone||"", entries: [], payments: [] }]);
     setShowAddCustomer(false); showToast("Customer added");
+  }
+  function updateCustomerPhone(cid, phone) {
+    setCustomers(p => p.map(c => c.id === cid ? { ...c, phone } : c));
+    showToast("Phone number saved");
   }
   function deleteCustomer(id) {
     setCustomers(p => p.filter(c => c.id !== id));
@@ -787,6 +791,7 @@ export default function App() {
               onDeleteCustomer={()=>requirePw(`Delete "${selCust.name}" and all data?`,()=>deleteCustomer(selCust.id))}
               onEditEntry={entry=>updateEntry(entry)}
               onUpdatePricing={pricing=>updateCustomerPricing(selCust.id,pricing)}
+              onUpdatePhone={phone=>updateCustomerPhone(selCust.id,phone)}
             />
           )}
           {page==="expenses" && (
@@ -903,12 +908,14 @@ function HomePage({ customers, totalWork, balance, onOpen, onAdd, expenses }) {
 }
 
 // ─── CUSTOMER PAGE ────────────────────────────────────────────────────────────
-function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onDeletePayment, onDeleteCustomer, onEditEntry, onUpdatePricing }) {
+function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onDeletePayment, onDeleteCustomer, onEditEntry, onUpdatePricing, onUpdatePhone }) {
   const [tab, setTab] = useState("entries");
   const [filterMonth, setFilterMonth] = useState("all");
   const [showBill, setShowBill] = useState(false);
   const [billMonth, setBillMonth] = useState("all");
   const [editingEntry, setEditingEntry] = useState(null);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneVal, setPhoneVal] = useState(customer.phone || "");
   const [pricingForm, setPricingForm] = useState({ price13:"", price16:"", dotPrice:"", paperPrice:"", ...(customer.pricing||{}) });
   const effPricing = { ...settings, ...(customer.pricing||{}) };
 
@@ -935,6 +942,24 @@ function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBac
           <div>
             <div className="page-title">{customer.name}</div>
             <div className="page-sub">Customer Account</div>
+            {!editingPhone ? (
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.65 3.38 2 2 0 0 1 3.62 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.59a16 16 0 0 0 6 6l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span style={{fontSize:13,color:customer.phone?"var(--text2)":"var(--text3)",fontFamily:"IBM Plex Mono"}}>
+                  {customer.phone || "No WhatsApp number set"}
+                </span>
+                <button className="icon-btn icon-btn-edit" style={{width:26,height:26}} onClick={()=>{setPhoneVal(customer.phone||"");setEditingPhone(true);}}><Icon name="edit" size={12}/></button>
+              </div>
+            ) : (
+              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                <input type="tel" placeholder="e.g. 919876543210" value={phoneVal} onChange={e=>setPhoneVal(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"){onUpdatePhone(phoneVal.trim());setEditingPhone(false);}if(e.key==="Escape")setEditingPhone(false);}}
+                  style={{background:"var(--surface2)",border:"1px solid var(--accent)",borderRadius:"var(--radius)",padding:"6px 10px",color:"var(--text)",fontFamily:"IBM Plex Mono",fontSize:13,outline:"none",width:190}}
+                  autoFocus/>
+                <button className="btn btn-primary btn-sm" onClick={()=>{onUpdatePhone(phoneVal.trim());setEditingPhone(false);}}><Icon name="check" size={12}/></button>
+                <button className="btn btn-ghost btn-sm" onClick={()=>setEditingPhone(false)}><Icon name="x" size={12}/></button>
+              </div>
+            )}
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button className="btn btn-sm" style={{background:"rgba(80,144,224,0.12)",color:"var(--blue)",border:"1px solid rgba(80,144,224,0.25)"}} onClick={()=>{setBillMonth(filterMonth);setShowBill(true);}}>
@@ -1262,7 +1287,11 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     }
     if (qrData) lines.push(`\nPayment: ${qrData}`);
     const text = lines.join("\n");
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    const phone = (customer.phone || "").replace(/\D/g, "");
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
   }
 
   return (
@@ -1890,16 +1919,20 @@ function BackupPage({ customers, expenses, settings, onRestore, showToast }) {
 // ─── ADD CUSTOMER MODAL ───────────────────────────────────────────────────────
 function AddCustomerModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  function handleAdd() { if (!name.trim()) return; onAdd(name, phone.trim()); }
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal">
         <div className="modal-header"><span className="modal-title">Add Customer</span><button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button></div>
         <div className="modal-body">
-          <div className="field"><span className="field-label">Customer Name</span><input autoFocus type="text" placeholder="e.g. Rameshbhai" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onAdd(name)}/></div>
+          <div className="field"><span className="field-label">Customer Name</span><input autoFocus type="text" placeholder="e.g. Rameshbhai" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAdd()}/></div>
+          <div className="field"><span className="field-label">WhatsApp Number (with country code)</span><input type="tel" placeholder="e.g. 919876543210" value={phone} onChange={e=>setPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAdd()}/></div>
+          <div style={{fontSize:12,color:"var(--text3)",fontFamily:"IBM Plex Mono",marginTop:-8}}>Enter number with country code, no + or spaces. India: 91XXXXXXXXXX</div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={()=>onAdd(name)} disabled={!name.trim()}><Icon name="plus" size={13}/> Add</button>
+          <button className="btn btn-primary" onClick={handleAdd} disabled={!name.trim()}><Icon name="plus" size={13}/> Add</button>
         </div>
       </div>
     </div>
