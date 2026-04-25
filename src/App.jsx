@@ -1346,7 +1346,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
           </div>
           {qrDataUrl && (
             <div style={{display:"flex",alignItems:"flex-start",gap:16,margin:"20px 0",padding:"16px",background:"#f9f9f9",borderRadius:8,border:"1px solid #eee"}}>
-              <img src={qrDataUrl} alt="Payment QR" style={{width:110,height:110,flexShrink:0,borderRadius:4}}/>
+              <img src={qrDataUrl} alt="Payment QR" style={{width:160,height:160,flexShrink:0,borderRadius:4}}/>
               <div style={{display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"#888",fontFamily:"'IBM Plex Mono',monospace"}}>{t.scanToPay}</div>
                 <div style={{fontSize:12,color:"#555",fontFamily:"'IBM Plex Mono',monospace",wordBreak:"break-all"}}>{qrData}</div>
