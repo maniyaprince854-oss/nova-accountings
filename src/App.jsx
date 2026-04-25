@@ -671,6 +671,7 @@ export default function App() {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [editExpense, setEditExpense] = useState(null);
   const [dupExpense, setDupExpense] = useState(null);
+  const [editPayment, setEditPayment] = useState(null);
   const [pwModal, setPwModal] = useState(null);
 
   useEffect(() => {
@@ -731,6 +732,10 @@ export default function App() {
   function deletePayment(cid, pid) {
     setCustomers(p => p.map(c => c.id === cid ? { ...c, payments: (c.payments || []).filter(x => x.id !== pid) } : c));
     showToast("Payment deleted");
+  }
+  function updatePayment(cid, payment) {
+    setCustomers(p => p.map(c => c.id === cid ? { ...c, payments: (c.payments || []).map(x => x.id === payment.id ? payment : x) } : c));
+    showToast("Payment updated");
   }
   function updateEntry(entry) {
     setCustomers(p => p.map(c => c.id === selectedCid ? { ...c, entries: (c.entries||[]).map(e => e.id === entry.id ? entry : e) } : c));
@@ -858,6 +863,7 @@ export default function App() {
               onAddEntry={()=>setShowAddEntry(true)}
               onAddPayment={()=>setShowAddPayment(true)}
               onDeleteEntry={eid=>requirePw("Delete this work entry?",()=>deleteEntry(selCust.id,eid))}
+              onEditPayment={p=>setEditPayment(p)}
               onDeletePayment={pid=>requirePw("Delete this payment record?",()=>deletePayment(selCust.id,pid))}
               onDeleteCustomer={()=>requirePw(`Delete "${selCust.name}" and all data?`,()=>deleteCustomer(selCust.id))}
               onEditEntry={entry=>updateEntry(entry)}
@@ -884,6 +890,7 @@ export default function App() {
         {showAddCustomer && <AddCustomerModal onClose={()=>setShowAddCustomer(false)} onAdd={addCustomer}/>}
         {showAddEntry && selCust && <AddEntryModal onClose={()=>setShowAddEntry(false)} onAdd={addEntry} settings={settings} customer={selCust}/>}
         {showAddPayment && selCust && <AddPaymentModal onClose={()=>setShowAddPayment(false)} onAdd={addPayment}/>}
+        {editPayment && selCust && <AddPaymentModal onClose={()=>setEditPayment(null)} onEdit={p=>{updatePayment(selCust.id,p);setEditPayment(null);}} initial={editPayment}/>}
         {showAddExpense && <AddExpenseModal onClose={()=>setShowAddExpense(false)} onSave={addExpense}/>}
         {editExpense && <AddExpenseModal onClose={()=>setEditExpense(null)} onSave={updateExpense} initial={editExpense}/>}
         {dupExpense && <AddExpenseModal onClose={()=>setDupExpense(null)} onSave={addExpense} initial={dupExpense}/>}
@@ -983,7 +990,7 @@ function HomePage({ customers, totalWork, balance, onOpen, onAdd, expenses }) {
 }
 
 // ─── CUSTOMER PAGE ────────────────────────────────────────────────────────────
-function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onDeletePayment, onDeleteCustomer, onEditEntry, onUpdatePricing, onUpdatePhone }) {
+function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onEditPayment, onDeletePayment, onDeleteCustomer, onEditEntry, onUpdatePricing, onUpdatePhone }) {
   const [tab, setTab] = useState("entries");
   const [filterMonth, setFilterMonth] = useState("all");
   const [showBill, setShowBill] = useState(false);
@@ -1173,7 +1180,12 @@ function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBac
                         <td className="mono" style={{fontSize:12,color:"var(--text2)",whiteSpace:"nowrap"}}>{fmtDate(p.date)}</td>
                         <td className="paid-cell">{inr(p.amount)}</td>
                         <td style={{color:"var(--text2)",fontSize:13}}>{p.notes||<span style={{color:"var(--text3)"}}>—</span>}</td>
-                        <td><button className="icon-btn" onClick={()=>onDeletePayment(p.id)}><Icon name="trash" size={13}/></button></td>
+                        <td>
+                          <div style={{display:"flex",gap:4}}>
+                            <button className="icon-btn icon-btn-edit" onClick={()=>onEditPayment(p)}><Icon name="edit" size={13}/></button>
+                            <button className="icon-btn" onClick={()=>onDeletePayment(p.id)}><Icon name="trash" size={13}/></button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1189,6 +1201,7 @@ function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBac
                   <span className="entry-card-date">{fmtDate(p.date)}</span>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span className="entry-card-amount green">{inr(p.amount)}</span>
+                    <button className="icon-btn icon-btn-edit" onClick={()=>onEditPayment(p)}><Icon name="edit" size={13}/></button>
                     <button className="icon-btn" onClick={()=>onDeletePayment(p.id)}><Icon name="trash" size={13}/></button>
                   </div>
                 </div>
@@ -2138,27 +2151,32 @@ function AddCustomerModal({ onClose, onAdd }) {
 }
 
 // ─── ADD PAYMENT MODAL ────────────────────────────────────────────────────────
-function AddPaymentModal({ onClose, onAdd }) {
-  const [date, setDate] = useState(todayStr());
-  const [amount, setAmount] = useState("");
-  const [notes, setNotes] = useState("");
+function AddPaymentModal({ onClose, onAdd, onEdit, initial }) {
+  const isEdit = !!initial;
+  const [date, setDate] = useState(initial?.date || todayStr());
+  const [amount, setAmount] = useState(initial?.amount ? String(initial.amount) : "");
+  const [notes, setNotes] = useState(initial?.notes || "");
   const amt = parseFloat(amount);
-  function handleSave() { if (!amt||amt<=0) return; onAdd({id:uid(),date,amount:amt,notes:notes.trim()}); }
+  function handleSave() { 
+    if (!amt||amt<=0) return; 
+    const p = { id: initial?.id || uid(), date, amount: amt, notes: notes.trim() };
+    if (isEdit) onEdit(p); else onAdd(p);
+  }
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal">
-        <div className="modal-header"><span className="modal-title"><Icon name="payment" size={15}/> Add Payment</span><button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button></div>
+        <div className="modal-header"><span className="modal-title"><Icon name="payment" size={15}/> {isEdit ? "Edit Payment" : "Add Payment"}</span><button className="icon-btn" onClick={onClose}><Icon name="x" size={14}/></button></div>
         <div className="modal-body">
           <div className="form-row">
             <div className="field"><span className="field-label">Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
-            <div className="field"><span className="field-label">Amount Paid (₹)</span><input autoFocus type="number" min="1" placeholder="e.g. 2000" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSave()}/></div>
+            <div className="field"><span className="field-label">Amount Paid (₹)</span><input autoFocus={!isEdit} type="number" min="1" placeholder="e.g. 2000" value={amount} onChange={e=>setAmount(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSave()}/></div>
           </div>
           <div className="field"><span className="field-label">Notes (Optional)</span><textarea placeholder="e.g. UPI, Cash, Bank Transfer…" value={notes} onChange={e=>setNotes(e.target.value)}/></div>
           {amt>0 && <div className="calc-preview"><div className="calc-row total"><span>Payment Amount</span><span style={{color:"var(--green)"}}>{inr(amt)}</span></div></div>}
         </div>
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-green" onClick={handleSave} disabled={!amt||amt<=0}><Icon name="save" size={13}/> Save Payment</button>
+          <button className="btn btn-green" onClick={handleSave} disabled={!amt||amt<=0}><Icon name="save" size={13}/> {isEdit ? "Update Payment" : "Save Payment"}</button>
         </div>
       </div>
     </div>
