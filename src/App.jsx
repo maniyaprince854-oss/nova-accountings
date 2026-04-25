@@ -647,6 +647,10 @@ export default function App() {
     setCustomers(p => p.map(c => c.id === cid ? { ...c, payments: (c.payments || []).filter(x => x.id !== pid) } : c));
     showToast("Payment deleted");
   }
+  function updateCustomerPricing(cid, pricing) {
+    setCustomers(p => p.map(c => c.id === cid ? { ...c, pricing } : c));
+    showToast("Customer pricing saved");
+  }
   function addExpense(exp) {
     setExpenses(p => [exp, ...p]);
     setShowAddExpense(false); showToast("Expense recorded");
@@ -762,6 +766,7 @@ export default function App() {
               onDeleteEntry={eid=>requirePw("Delete this work entry?",()=>deleteEntry(selCust.id,eid))}
               onDeletePayment={pid=>requirePw("Delete this payment record?",()=>deletePayment(selCust.id,pid))}
               onDeleteCustomer={()=>requirePw(`Delete "${selCust.name}" and all data?`,()=>deleteCustomer(selCust.id))}
+              onUpdatePricing={pricing=>updateCustomerPricing(selCust.id,pricing)}
             />
           )}
           {page==="expenses" && (
@@ -779,7 +784,7 @@ export default function App() {
         </main>
 
         {showAddCustomer && <AddCustomerModal onClose={()=>setShowAddCustomer(false)} onAdd={addCustomer}/>}
-        {showAddEntry && selCust && <AddEntryModal onClose={()=>setShowAddEntry(false)} onAdd={addEntry} settings={settings}/>}
+        {showAddEntry && selCust && <AddEntryModal onClose={()=>setShowAddEntry(false)} onAdd={addEntry} settings={settings} customer={selCust}/>}
         {showAddPayment && selCust && <AddPaymentModal onClose={()=>setShowAddPayment(false)} onAdd={addPayment}/>}
         {showAddExpense && <AddExpenseModal onClose={()=>setShowAddExpense(false)} onSave={addExpense}/>}
         {editExpense && <AddExpenseModal onClose={()=>setEditExpense(null)} onSave={updateExpense} initial={editExpense}/>}
@@ -842,11 +847,13 @@ function HomePage({ customers, totalWork, balance, onOpen, onAdd }) {
 }
 
 // ─── CUSTOMER PAGE ────────────────────────────────────────────────────────────
-function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onDeletePayment, onDeleteCustomer }) {
+function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBack, onAddEntry, onAddPayment, onDeleteEntry, onDeletePayment, onDeleteCustomer, onUpdatePricing }) {
   const [tab, setTab] = useState("entries");
   const [filterMonth, setFilterMonth] = useState("all");
   const [showBill, setShowBill] = useState(false);
   const [billMonth, setBillMonth] = useState("all");
+  const [pricingForm, setPricingForm] = useState({ price13:"", price16:"", dotPrice:"", paperPrice:"", ...(customer.pricing||{}) });
+  const effPricing = { ...settings, ...(customer.pricing||{}) };
 
   const entryMonths = [...new Set((customer.entries||[]).map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
   const filteredEntries = filterMonth==="all" ? (customer.entries||[]) : (customer.entries||[]).filter(e=>e.date.startsWith(filterMonth));
@@ -900,7 +907,7 @@ function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBac
       </div>
 
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-        {[["entries","laser","Work Entries"],["payments","payment","Payments"]].map(([t,ic,lb])=>(
+        {[["entries","laser","Work Entries"],["payments","payment","Payments"],["pricing","settings","Pricing"]].map(([t,ic,lb])=>(
           <button key={t} className={`btn btn-sm ${tab===t?"btn-primary":"btn-ghost"}`} onClick={()=>setTab(t)}>
             <Icon name={ic} size={12}/> {lb}
           </button>
@@ -1029,6 +1036,51 @@ function CustomerPage({ customer, settings, totalWork, totalPaid, balance, onBac
             ))}
           </div>
         </>
+      )}
+
+      {tab==="pricing" && (
+        <div style={{maxWidth:480}}>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:4}}>Custom Pricing for {customer.name}</div>
+            <div style={{fontSize:12,color:"var(--text3)",fontFamily:"IBM Plex Mono"}}>Override global defaults for this customer only. Leave blank to use global default.</div>
+          </div>
+          {[
+            ["price13",  "13\" Sheet Price (₹)",  settings.price13],
+            ["price16",  "16\" Sheet Price (₹)",  settings.price16],
+            ["dotPrice", "Dot Price (₹/dot)",      settings.dotPrice],
+            ["paperPrice","Paper Price (₹/sheet)", settings.paperPrice],
+          ].map(([k, label, def]) => (
+            <div key={k} className="settings-field" style={{marginBottom:14}}>
+              <label style={{fontSize:11,fontWeight:600,color:"var(--text3)",letterSpacing:".07em",textTransform:"uppercase",fontFamily:"IBM Plex Mono"}}>{label}</label>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input
+                  type="number" step={k==="dotPrice"?"0.001":"1"}
+                  style={{background:"var(--surface2)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"10px 12px",color:"var(--text)",fontFamily:"IBM Plex Mono",fontSize:15,outline:"none",flex:1}}
+                  placeholder={`Default: ${def}`}
+                  value={pricingForm[k]!==undefined && pricingForm[k]!=="" ? pricingForm[k] : ""}
+                  onChange={e=>setPricingForm(p=>({...p,[k]:e.target.value}))}
+                />
+                {customer.pricing?.[k]!==undefined && (
+                  <button className="btn btn-ghost btn-sm" onClick={()=>{
+                    const updated = {...pricingForm}; delete updated[k]; setPricingForm(updated);
+                  }}>Reset</button>
+                )}
+              </div>
+              <div style={{fontSize:11,color:"var(--text3)",fontFamily:"IBM Plex Mono",marginTop:2}}>
+                Active: <strong style={{color:customer.pricing?.[k]!==undefined?"var(--accent)":"var(--text2)"}}>
+                  ₹{customer.pricing?.[k]!==undefined ? customer.pricing[k] : def}
+                </strong>{customer.pricing?.[k]!==undefined ? " (custom)" : " (global default)"}
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-primary" style={{marginTop:4}} onClick={()=>{
+            const cleaned = {};
+            ["price13","price16","dotPrice","paperPrice"].forEach(k=>{
+              if (pricingForm[k]!==undefined && pricingForm[k]!=="") cleaned[k] = parseFloat(pricingForm[k]);
+            });
+            onUpdatePricing(cleaned);
+          }}><Icon name="save" size={14}/> Save Pricing</button>
+        </div>
       )}
 
       {showBill && <BillModal customer={customer} settings={settings} billMonth={billMonth} setBillMonth={setBillMonth} totalPaid={totalPaid} balance={balance} onClose={()=>setShowBill(false)}/>}
@@ -1603,7 +1655,8 @@ function AddPaymentModal({ onClose, onAdd }) {
 }
 
 // ─── ADD ENTRY MODAL ──────────────────────────────────────────────────────────
-function AddEntryModal({ onClose, onAdd, settings }) {
+function AddEntryModal({ onClose, onAdd, settings, customer }) {
+  const effectiveSettings = { ...settings, ...(customer?.pricing || {}) };
   const [date, setDate]           = useState(todayStr());
   const [sheetType, setSheetType] = useState("Laser");
 
@@ -1635,13 +1688,13 @@ function AddEntryModal({ onClose, onAdd, settings }) {
   const customAmtN = parseFloat(customAmount) || 0;
 
   // ── Laser combined calculation ──
-  const cost13sheets  = s13N * settings.price13;
-  const cost16sheets  = s16N * settings.price16;
-  const cost13dots    = s13D * settings.dotPrice;
-  const cost16dots    = s16D * settings.dotPrice;
+  const cost13sheets  = s13N * effectiveSettings.price13;
+  const cost16sheets  = s16N * effectiveSettings.price16;
+  const cost13dots    = s13D * effectiveSettings.dotPrice;
+  const cost16dots    = s16D * effectiveSettings.dotPrice;
   const totalSheetCost = cost13sheets + cost16sheets;
   const totalDotCost   = cost13dots + cost16dots;
-  const totalPaperCost = paper ? (s13N + s16N) * settings.paperPrice : 0;
+  const totalPaperCost = paper ? (s13N + s16N) * effectiveSettings.paperPrice : 0;
   const laserAmount    = totalSheetCost + totalDotCost + totalPaperCost;
   const laserHasAny    = s13N > 0 || s16N > 0;
 
