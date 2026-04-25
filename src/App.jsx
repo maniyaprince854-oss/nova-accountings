@@ -588,97 +588,46 @@ const style = `
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     transition:opacity .55s ease, transform .55s ease;
   }
-  .splash.fade-out { opacity:0; transform:scale(1.05); pointer-events:none; }
-  .splash-beams { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-  .splash-beam {
-    position:absolute; top:0; width:1px;
-    background:linear-gradient(to bottom, transparent 0%, #f0a500 50%, transparent 100%);
-    animation:beamDrop 2s ease-in-out infinite; opacity:0; height:30%;
-  }
-  @keyframes beamDrop {
-    0%   { top:-30%; opacity:0; }
-    15%  { opacity:.8; }
-    85%  { opacity:.3; }
-    100% { top:130%; opacity:0; }
-  }
-  .splash-ring {
-    position:absolute; border-radius:50%;
-    border:1px solid rgba(240,165,0,0.2);
-    animation:ringPulse 2.2s ease-out infinite;
-  }
-  @keyframes ringPulse {
-    0%   { transform:scale(.5); opacity:.9; }
-    100% { transform:scale(2.4); opacity:0; }
-  }
+  .splash.fade-out { opacity:0; pointer-events:none; }
   .splash-logo-wrap {
     position:relative; z-index:2;
     display:flex; flex-direction:column; align-items:center; gap:20px;
-    animation:splashIn .65s cubic-bezier(.22,1,.36,1) both;
+    animation:splashIn 1.2s cubic-bezier(.22,1,.36,1) both;
   }
   @keyframes splashIn {
-    from { opacity:0; transform:translateY(28px) scale(.9); }
+    from { opacity:0; transform:translateY(10px) scale(.95); }
     to   { opacity:1; transform:translateY(0) scale(1); }
   }
-  .splash-icon { position:relative; animation:iconPop .7s cubic-bezier(.22,1,.36,1) both; }
-  @keyframes iconPop {
-    from { opacity:0; transform:scale(.4) rotate(-15deg); }
-    to   { opacity:1; transform:scale(1) rotate(0); }
-  }
+  .splash-icon { position:relative; }
   .splash-glow {
     position:absolute; inset:-20px; border-radius:50%;
-    background:radial-gradient(circle, rgba(240,165,0,0.4) 0%, transparent 70%);
-    animation:glowPulse 1.5s ease-in-out infinite alternate;
+    background:radial-gradient(circle, rgba(240,165,0,0.2) 0%, transparent 60%);
+    animation:glowPulse 2s ease-in-out infinite alternate;
   }
   @keyframes glowPulse {
-    from { opacity:.4; transform:scale(.85); }
-    to   { opacity:1; transform:scale(1.15); }
+    from { opacity:0.5; transform:scale(.9); }
+    to   { opacity:1; transform:scale(1.1); }
   }
-  .splash-title { display:flex; flex-direction:column; align-items:center; gap:5px; animation:splashIn .7s .12s cubic-bezier(.22,1,.36,1) both; }
+  .splash-title { display:flex; flex-direction:column; align-items:center; gap:5px; animation:splashIn 1.2s .1s cubic-bezier(.22,1,.36,1) both; }
   .splash-name {
     font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:800;
     color:#f0a500; letter-spacing:.14em; text-transform:uppercase;
-    text-shadow:0 0 40px rgba(240,165,0,0.55), 0 0 80px rgba(240,165,0,0.2);
   }
   .splash-sub { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:500; color:#444; letter-spacing:.25em; text-transform:uppercase; }
-  .splash-bar-wrap {
-    margin-top:44px; width:160px; height:2px;
-    background:#1a1a1a; border-radius:2px; overflow:hidden;
-    animation:splashIn .7s .28s cubic-bezier(.22,1,.36,1) both;
-  }
-  .splash-bar {
-    height:100%; width:0%;
-    background:linear-gradient(90deg,#f0a500,#f0c040);
-    border-radius:2px;
-    animation:barFill 1.7s .38s cubic-bezier(.4,0,.2,1) forwards;
-    box-shadow:0 0 10px rgba(240,165,0,.8);
-  }
-  @keyframes barFill { 0%{width:0%} 65%{width:82%} 100%{width:100%} }
-  .splash-tagline { margin-top:12px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#2e2e2e; letter-spacing:.14em; text-transform:uppercase; animation:splashIn .7s .45s cubic-bezier(.22,1,.36,1) both; }
+  .splash-tagline { margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#333; letter-spacing:.14em; text-transform:uppercase; animation:splashIn 1.2s .2s cubic-bezier(.22,1,.36,1) both; }
 `;
 
 // ─── SPLASH COMPONENT ─────────────────────────────────────────────────────────
 function SplashScreen({ onDone }) {
   const [fading, setFading] = useState(false);
   useEffect(() => {
-    const t1 = setTimeout(() => setFading(true), 2000);
-    const t2 = setTimeout(() => onDone(), 2600);
+    const t1 = setTimeout(() => setFading(true), 1200);
+    const t2 = setTimeout(() => onDone(), 1750);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
-  const beams = [
-    { left:"12%", delay:"0s", dur:"2s" }, { left:"28%", delay:".4s", dur:"1.8s" },
-    { left:"45%", delay:".1s", dur:"2.2s" }, { left:"62%", delay:".6s", dur:"1.9s" },
-    { left:"78%", delay:".2s", dur:"2.1s" }, { left:"91%", delay:".8s", dur:"2s" },
-  ];
+  
   return (
     <div className={`splash${fading ? " fade-out" : ""}`}>
-      <div className="splash-beams">
-        {beams.map((b,i) => (
-          <div key={i} className="splash-beam" style={{left:b.left,animationDelay:b.delay,animationDuration:b.dur}}/>
-        ))}
-      </div>
-      <div className="splash-ring" style={{width:220,height:220,animationDelay:"0s"}}/>
-      <div className="splash-ring" style={{width:220,height:220,animationDelay:".7s"}}/>
-      <div className="splash-ring" style={{width:220,height:220,animationDelay:"1.4s"}}/>
       <div className="splash-logo-wrap">
         <div className="splash-icon">
           <div className="splash-glow"/>
@@ -690,9 +639,6 @@ function SplashScreen({ onDone }) {
         <div className="splash-title">
           <div className="splash-name">Nova</div>
           <div className="splash-sub">Accountings</div>
-        </div>
-        <div className="splash-bar-wrap">
-          <div className="splash-bar"/>
         </div>
         <div className="splash-tagline">Laser &amp; CNC Sheet Billing</div>
       </div>
@@ -1334,14 +1280,6 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
   const [qrDataUrl, setQrDataUrl] = useState("");
   const billRef = useRef();
 
-  useEffect(() => {
-    // If custom image uploaded, use it directly; else generate from text
-    if (qrImage) { setQrDataUrl(qrImage); return; }
-    if (!qrData.trim()) { setQrDataUrl(""); return; }
-    QRCode.toDataURL(qrData.trim(), { width: 120, margin: 1, color: { dark: "#111111", light: "#ffffff" } })
-      .then(url => setQrDataUrl(url))
-      .catch(() => setQrDataUrl(""));
-  }, [qrData, qrImage]);
   const entryMonths = [...new Set((customer.entries||[]).map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
   const billEntries = billMonth==="all" ? (customer.entries||[]) : (customer.entries||[]).filter(e=>e.date.startsWith(billMonth));
   const billTotal    = billEntries.reduce((s,e)=>s+e.amount,0);
@@ -1349,6 +1287,23 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
   const grandTotal   = billTotal + gstAmount;
   const billBalance  = billMonth==="all" ? (grandTotal - totalPaid) : grandTotal;
   const periodLabel = billMonth==="all" ? t.allTime : fmtMonth(billMonth);
+
+  useEffect(() => {
+    // If custom image uploaded, use it directly; else generate from text
+    if (qrImage) { setQrDataUrl(qrImage); return; }
+    if (!qrData.trim()) { setQrDataUrl(""); return; }
+    
+    let finalQrStr = qrData.trim();
+    if (finalQrStr.includes("@") && !finalQrStr.startsWith("upi://")) {
+      finalQrStr = `upi://pay?pa=${finalQrStr}&pn=${encodeURIComponent(bizName)}`;
+      if (billBalance > 0) finalQrStr += `&am=${Math.abs(billBalance).toFixed(2)}`;
+    }
+
+    QRCode.toDataURL(finalQrStr, { width: 120, margin: 1, color: { dark: "#111111", light: "#ffffff" } })
+      .then(url => setQrDataUrl(url))
+      .catch(() => setQrDataUrl(""));
+  }, [qrData, qrImage, bizName, billBalance]);
+  
   const billNo = `NOVA-${customer.name.replace(/\s/g,"").toUpperCase().slice(0,4)}-${billMonth==="all"?"ALL":billMonth.replace("-","")}`;
   const today = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
 
@@ -1471,10 +1426,15 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
           </div>
           {qrDataUrl && (
             <div style={{display:"flex",alignItems:"flex-start",gap:16,margin:"20px 0",padding:"16px",background:"#f9f9f9",borderRadius:8,border:"1px solid #eee"}}>
-              <img src={qrDataUrl} alt="Payment QR" style={{width:160,height:160,flexShrink:0,borderRadius:4}}/>
-              <div style={{display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
+              <img src={qrDataUrl} alt="Payment QR" style={{width:120,height:120,flexShrink:0,borderRadius:4}}/>
+              <div style={{display:"flex",flexDirection:"column",justifyContent:"center",gap:6}}>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"#888",fontFamily:"'IBM Plex Mono',monospace"}}>{t.scanToPay}</div>
                 <div style={{fontSize:12,color:"#555",fontFamily:"'IBM Plex Mono',monospace",wordBreak:"break-all"}}>{qrData}</div>
+                {qrData.includes("@") && billBalance > 0 && !qrImage && (
+                  <a href={`upi://pay?pa=${qrData.trim()}&pn=${encodeURIComponent(bizName)}&am=${Math.abs(billBalance).toFixed(2)}`} style={{display:"inline-block",background:"#1a7a3f",color:"#fff",padding:"8px 12px",borderRadius:4,fontSize:12,fontWeight:700,textDecoration:"none",marginTop:4,fontFamily:"'IBM Plex Sans',sans-serif",textAlign:"center"}}>
+                    Click to Pay ₹{Math.abs(billBalance).toLocaleString("en-IN",{minimumFractionDigits:2})} via UPI
+                  </a>
+                )}
               </div>
             </div>
           )}
