@@ -580,10 +580,129 @@ const style = `
     .profit-card-value { font-size:17px; }
     .stat-value { font-size:14px; }
   }
+
+  /* ── SPLASH SCREEN ── */
+  .splash {
+    position:fixed; inset:0; z-index:99999;
+    background:#0f0f0f;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:opacity .55s ease, transform .55s ease;
+  }
+  .splash.fade-out { opacity:0; transform:scale(1.05); pointer-events:none; }
+  .splash-beams { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .splash-beam {
+    position:absolute; top:0; width:1px;
+    background:linear-gradient(to bottom, transparent 0%, #f0a500 50%, transparent 100%);
+    animation:beamDrop 2s ease-in-out infinite; opacity:0; height:30%;
+  }
+  @keyframes beamDrop {
+    0%   { top:-30%; opacity:0; }
+    15%  { opacity:.8; }
+    85%  { opacity:.3; }
+    100% { top:130%; opacity:0; }
+  }
+  .splash-ring {
+    position:absolute; border-radius:50%;
+    border:1px solid rgba(240,165,0,0.2);
+    animation:ringPulse 2.2s ease-out infinite;
+  }
+  @keyframes ringPulse {
+    0%   { transform:scale(.5); opacity:.9; }
+    100% { transform:scale(2.4); opacity:0; }
+  }
+  .splash-logo-wrap {
+    position:relative; z-index:2;
+    display:flex; flex-direction:column; align-items:center; gap:20px;
+    animation:splashIn .65s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes splashIn {
+    from { opacity:0; transform:translateY(28px) scale(.9); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+  }
+  .splash-icon { position:relative; animation:iconPop .7s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes iconPop {
+    from { opacity:0; transform:scale(.4) rotate(-15deg); }
+    to   { opacity:1; transform:scale(1) rotate(0); }
+  }
+  .splash-glow {
+    position:absolute; inset:-20px; border-radius:50%;
+    background:radial-gradient(circle, rgba(240,165,0,0.4) 0%, transparent 70%);
+    animation:glowPulse 1.5s ease-in-out infinite alternate;
+  }
+  @keyframes glowPulse {
+    from { opacity:.4; transform:scale(.85); }
+    to   { opacity:1; transform:scale(1.15); }
+  }
+  .splash-title { display:flex; flex-direction:column; align-items:center; gap:5px; animation:splashIn .7s .12s cubic-bezier(.22,1,.36,1) both; }
+  .splash-name {
+    font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:800;
+    color:#f0a500; letter-spacing:.14em; text-transform:uppercase;
+    text-shadow:0 0 40px rgba(240,165,0,0.55), 0 0 80px rgba(240,165,0,0.2);
+  }
+  .splash-sub { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:500; color:#444; letter-spacing:.25em; text-transform:uppercase; }
+  .splash-bar-wrap {
+    margin-top:44px; width:160px; height:2px;
+    background:#1a1a1a; border-radius:2px; overflow:hidden;
+    animation:splashIn .7s .28s cubic-bezier(.22,1,.36,1) both;
+  }
+  .splash-bar {
+    height:100%; width:0%;
+    background:linear-gradient(90deg,#f0a500,#f0c040);
+    border-radius:2px;
+    animation:barFill 1.7s .38s cubic-bezier(.4,0,.2,1) forwards;
+    box-shadow:0 0 10px rgba(240,165,0,.8);
+  }
+  @keyframes barFill { 0%{width:0%} 65%{width:82%} 100%{width:100%} }
+  .splash-tagline { margin-top:12px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#2e2e2e; letter-spacing:.14em; text-transform:uppercase; animation:splashIn .7s .45s cubic-bezier(.22,1,.36,1) both; }
 `;
+
+// ─── SPLASH COMPONENT ─────────────────────────────────────────────────────────
+function SplashScreen({ onDone }) {
+  const [fading, setFading] = useState(false);
+  useEffect(() => {
+    const t1 = setTimeout(() => setFading(true), 2000);
+    const t2 = setTimeout(() => onDone(), 2600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+  const beams = [
+    { left:"12%", delay:"0s", dur:"2s" }, { left:"28%", delay:".4s", dur:"1.8s" },
+    { left:"45%", delay:".1s", dur:"2.2s" }, { left:"62%", delay:".6s", dur:"1.9s" },
+    { left:"78%", delay:".2s", dur:"2.1s" }, { left:"91%", delay:".8s", dur:"2s" },
+  ];
+  return (
+    <div className={`splash${fading ? " fade-out" : ""}`}>
+      <div className="splash-beams">
+        {beams.map((b,i) => (
+          <div key={i} className="splash-beam" style={{left:b.left,animationDelay:b.delay,animationDuration:b.dur}}/>
+        ))}
+      </div>
+      <div className="splash-ring" style={{width:220,height:220,animationDelay:"0s"}}/>
+      <div className="splash-ring" style={{width:220,height:220,animationDelay:".7s"}}/>
+      <div className="splash-ring" style={{width:220,height:220,animationDelay:"1.4s"}}/>
+      <div className="splash-logo-wrap">
+        <div className="splash-icon">
+          <div className="splash-glow"/>
+          <svg width="72" height="72" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="9" fill="#f0a500"/>
+            <text x="16" y="22" textAnchor="middle" fontFamily="IBM Plex Mono,monospace" fontWeight="800" fontSize="18" fill="#000">N</text>
+          </svg>
+        </div>
+        <div className="splash-title">
+          <div className="splash-name">Nova</div>
+          <div className="splash-sub">Accountings</div>
+        </div>
+        <div className="splash-bar-wrap">
+          <div className="splash-bar"/>
+        </div>
+        <div className="splash-tagline">Laser &amp; CNC Sheet Billing</div>
+      </div>
+    </div>
+  );
+}
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [page, setPage] = useState("home");
   const [selectedCid, setSelectedCid] = useState(null);
   const [customers, setCustomers] = useState([]);
@@ -708,7 +827,12 @@ export default function App() {
     return newCust;
   }
 
-  if (!loaded) return <div style={{ color: "#9a9a9a", padding: 40, fontFamily: "IBM Plex Mono" }}>Loading…</div>;
+  if (!loaded) return (
+    <>
+      <style>{style}</style>
+      <SplashScreen onDone={() => {}} />
+    </>
+  );
 
   const navPages = [
     ["home","users","Customers"],
@@ -816,6 +940,7 @@ export default function App() {
         {pwModal && <PasswordModal label={pwModal.label} onClose={()=>setPwModal(null)} onConfirm={()=>{pwModal.fn();setPwModal(null);}}/>}
         {toast && <div className="toast">✓ {toast}</div>}
       </div>
+      {showSplash && <SplashScreen onDone={() => setShowSplash(false)}/>}
     </>
   );
 }
