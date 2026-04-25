@@ -1122,14 +1122,44 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     const doc = iframe.contentDocument || iframe.contentWindow.document;
     doc.open();
     doc.write(`<!DOCTYPE html><html><head><title>Invoice - ${customer.name}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;color:#111;padding:32px 36px;}table{width:100%;border-collapse:collapse;}th{padding:8px 10px;background:#f5f5f5;border-bottom:1px solid #ddd;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#555;text-align:left;}td{padding:9px 10px;border-bottom:1px solid #eee;font-size:12px;color:#222;vertical-align:middle;}tr:last-child td{border-bottom:none;}.amt,.num{text-align:right;font-family:monospace;}</style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      @page { margin: 18mm 16mm; }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'IBM Plex Sans', Arial, sans-serif; background: #fff; color: #111; }
+      .bill-page { background:#fff; color:#111; padding:0; }
+      .bill-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px; padding-bottom:20px; border-bottom:2px solid #111; }
+      .bill-brand-name { font-size:22px; font-weight:800; color:#111; letter-spacing:-0.02em; }
+      .bill-brand-sub { font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+      .bill-meta { text-align:right; }
+      .bill-meta-title { font-size:20px; font-weight:700; color:#111; }
+      .bill-meta-detail { font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
+      .bill-to-label { font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#888; font-family:'IBM Plex Mono',monospace; margin-bottom:4px; }
+      .bill-to-name { font-size:18px; font-weight:700; color:#111; }
+      .bill-to-period { font-size:13px; color:#555; font-family:'IBM Plex Mono',monospace; margin-top:2px; margin-bottom:24px; }
+      .bill-table-scroll { overflow:visible; }
+      .bill-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+      .bill-table th { padding:8px 10px; background:#f5f5f5; border-bottom:1px solid #ddd; font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#555; text-align:left; font-family:'IBM Plex Mono',monospace; }
+      .bill-table td { padding:9px 10px; border-bottom:1px solid #eee; font-size:12px; color:#222; vertical-align:middle; }
+      .bill-table tr:last-child td { border-bottom:none; }
+      .bill-table .amt { font-family:'IBM Plex Mono',monospace; font-weight:600; text-align:right; }
+      .bill-table .num { font-family:'IBM Plex Mono',monospace; text-align:right; }
+      .bill-summary { margin-left:auto; width:220px; margin-bottom:24px; }
+      .bill-sum-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; color:#444; border-bottom:1px solid #eee; font-family:'IBM Plex Mono',monospace; }
+      .bill-sum-row.total { font-size:16px; font-weight:700; color:#111; border-bottom:2px solid #111; border-top:2px solid #111; padding:8px 0; margin-top:4px; }
+      .bill-sum-row.paid { color:#1a7a3f; }
+      .bill-sum-row.balance-due { color:#c0392b; font-weight:700; }
+      .bill-sum-row.balance-ok { color:#1a7a3f; font-weight:700; }
+      .bill-footer { text-align:center; font-size:11px; color:#aaa; font-family:'IBM Plex Mono',monospace; padding-top:20px; border-top:1px solid #eee; }
+    </style>
     </head><body>${content}</body></html>`);
     doc.close();
     setTimeout(() => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
       setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
-    }, 500);
+    }, 800);
   }
 
   return (
