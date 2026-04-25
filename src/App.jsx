@@ -670,6 +670,7 @@ export default function App() {
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [editExpense, setEditExpense] = useState(null);
+  const [dupExpense, setDupExpense] = useState(null);
   const [pwModal, setPwModal] = useState(null);
 
   useEffect(() => {
@@ -868,8 +869,10 @@ export default function App() {
             <ExpensesPage
               expenses={expenses}
               totalPaid={globalTotalPaid}
+              settings={settings}
               onAdd={()=>setShowAddExpense(true)}
               onEdit={exp=>setEditExpense(exp)}
+              onDuplicate={exp=>setDupExpense({...exp, id:null, date:todayStr()})}
               onDelete={id=>requirePw("Delete this expense?",()=>deleteExpense(id))}
             />
           )}
@@ -883,6 +886,7 @@ export default function App() {
         {showAddPayment && selCust && <AddPaymentModal onClose={()=>setShowAddPayment(false)} onAdd={addPayment}/>}
         {showAddExpense && <AddExpenseModal onClose={()=>setShowAddExpense(false)} onSave={addExpense}/>}
         {editExpense && <AddExpenseModal onClose={()=>setEditExpense(null)} onSave={updateExpense} initial={editExpense}/>}
+        {dupExpense && <AddExpenseModal onClose={()=>setDupExpense(null)} onSave={addExpense} initial={dupExpense}/>}
         {pwModal && <PasswordModal label={pwModal.label} onClose={()=>setPwModal(null)} onConfirm={()=>{pwModal.fn();setPwModal(null);}}/>}
         {toast && <div className="toast">✓ {toast}</div>}
       </div>
@@ -1453,7 +1457,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
 }
 
 // ─── EXPENSES PAGE ────────────────────────────────────────────────────────────
-function ExpensesPage({ expenses, totalPaid, onAdd, onEdit, onDelete }) {
+function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicate, onDelete }) {
   const [filterCat, setFilterCat] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
   const [search, setSearch] = useState("");
@@ -1467,6 +1471,74 @@ function ExpensesPage({ expenses, totalPaid, onAdd, onEdit, onDelete }) {
     if (search && !e.title.toLowerCase().includes(search.toLowerCase()) && !e.description?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  function exportToPDF() {
+    const bizName = settings?.businessName || "Nova Accountings";
+    const bizSub  = settings?.businessSubtitle || "Laser & CNC Sheet Billing";
+    const label = filterMonth === "all" ? "All Time Expenses" : `Expenses for ${fmtMonth(filterMonth)}`;
+    const today = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
+    const totalFiltered = filtered.reduce((s,e)=>s+e.amount,0);
+
+    const rows = filtered.map(e => `
+      <tr style="background:#fff">
+        <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:10px 14px;border-bottom:1px solid #eee;">${fmtDate(e.date)}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:600;font-size:13px;">${e.title}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#555;">${e.category}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#666;">${e.description||"—"}</td>
+        <td style="text-align:right;font-family:'IBM Plex Mono',monospace;padding:10px 14px;border-bottom:1px solid #eee;font-weight:700;color:#c0392b;">₹${e.amount.toLocaleString("en-IN",{minimumFractionDigits:2})}</td>
+      </tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html><html><head><title>Expense Report - ${bizName}</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      @page { margin:18mm 16mm; }
+      body { font-family:'IBM Plex Sans',Arial,sans-serif; background:#fff; color:#111; margin:0; }
+      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+      .header { border-bottom:2px solid #111; padding-bottom:16px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-start; }
+      .biz-name { font-size:22px; font-weight:800; letter-spacing:-0.02em; }
+      .biz-sub { font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+      .report-meta { text-align:right; }
+      .report-title { font-size:20px; font-weight:700; }
+      .report-detail { font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
+    </style></head><body>
+      <div class="header">
+        <div><div class="biz-name">${bizName}</div><div class="biz-sub">${bizSub}</div></div>
+        <div class="report-meta"><div class="report-title">Expense Report</div><div class="report-detail">${label}</div><div class="report-detail">Generated: ${today}</div></div>
+      </div>
+      
+      <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:13px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:0.05em;">Total Expenses Listed</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:#c0392b;">₹${totalFiltered.toLocaleString("en-IN",{minimumFractionDigits:2})}</span>
+      </div>
+
+      ${filtered.length===0 ? '<div style="text-align:center;color:#888;padding:40px;font-size:14px;">No expenses found for this period.</div>' : `
+      <table style="width:100%;border-collapse:collapse;border:1px solid #eee;">
+        <thead>
+          <tr>
+            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Date</th>
+            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Title</th>
+            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Category</th>
+            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Description</th>
+            <th style="background:#f5f5f5;padding:10px 14px;text-align:right;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`}
+      <div style="text-align:center;font-size:10px;color:#aaa;margin-top:24px;font-family:'IBM Plex Mono',monospace;">Generated by Nova Accountings</div>
+    </body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:-9999px;top:0;width:800px;height:1000px;border:0;";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
+    }, 800);
+  }
 
   const totalAll    = expenses.reduce((s,e)=>s+e.amount,0);
   const totalMonth  = expenses.filter(e=>e.date.startsWith(thisMonth())).reduce((s,e)=>s+e.amount,0);
@@ -1504,7 +1576,14 @@ function ExpensesPage({ expenses, totalPaid, onAdd, onEdit, onDelete }) {
             {expenseMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
           </select>
         </div>
-        <button className="btn btn-danger" style={{background:"rgba(224,80,80,0.12)",borderColor:"rgba(224,80,80,0.3)"}} onClick={onAdd}><Icon name="plus" size={14}/> Add Expense</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button className="btn btn-ghost" style={{borderColor:"var(--border)",color:"var(--text2)"}} onClick={exportToPDF}>
+            <Icon name="print" size={14}/> PDF Report
+          </button>
+          <button className="btn btn-danger" style={{background:"rgba(224,80,80,0.12)",borderColor:"rgba(224,80,80,0.3)"}} onClick={onAdd}>
+            <Icon name="plus" size={14}/> Add Expense
+          </button>
+        </div>
       </div>
 
       {/* Desktop table */}
@@ -1523,8 +1602,9 @@ function ExpensesPage({ expenses, totalPaid, onAdd, onEdit, onDelete }) {
                     <td className="expense-cell">{inr(e.amount)}</td>
                     <td>
                       <div style={{display:"flex",gap:4}}>
-                        <button className="icon-btn icon-btn-edit" onClick={()=>onEdit(e)}><Icon name="edit" size={13}/></button>
-                        <button className="icon-btn" onClick={()=>onDelete(e.id)}><Icon name="trash" size={13}/></button>
+                        <button className="icon-btn" onClick={()=>onDuplicate(e)} title="Duplicate"><Icon name="file" size={13}/></button>
+                        <button className="icon-btn icon-btn-edit" onClick={()=>onEdit(e)} title="Edit"><Icon name="edit" size={13}/></button>
+                        <button className="icon-btn" onClick={()=>onDelete(e.id)} title="Delete"><Icon name="trash" size={13}/></button>
                       </div>
                     </td>
                   </tr>
@@ -1544,8 +1624,9 @@ function ExpensesPage({ expenses, totalPaid, onAdd, onEdit, onDelete }) {
               <span className="entry-card-date">{fmtDate(e.date)}</span>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <span className="entry-card-amount red">{inr(e.amount)}</span>
-                <button className="icon-btn icon-btn-edit" onClick={()=>onEdit(e)}><Icon name="edit" size={13}/></button>
-                <button className="icon-btn" onClick={()=>onDelete(e.id)}><Icon name="trash" size={13}/></button>
+                <button className="icon-btn" onClick={()=>onDuplicate(e)} title="Duplicate"><Icon name="file" size={13}/></button>
+                <button className="icon-btn icon-btn-edit" onClick={()=>onEdit(e)} title="Edit"><Icon name="edit" size={13}/></button>
+                <button className="icon-btn" onClick={()=>onDelete(e.id)} title="Delete"><Icon name="trash" size={13}/></button>
               </div>
             </div>
             <div className="entry-card-meta">
