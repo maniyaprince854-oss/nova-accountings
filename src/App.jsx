@@ -1286,28 +1286,28 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
   function handleWhatsApp() {
     const lines = [];
     lines.push(`*${bizName}*`);
-    lines.push(`Invoice: ${billNo}`);
-    lines.push(`Date: ${today}`);
+    lines.push(`${t.invoice}: ${billNo}`);
+    lines.push(`${t.date}: ${today}`);
     lines.push(`---`);
-    lines.push(`*Bill To:* ${customer.name}`);
-    lines.push(`Period: ${periodLabel}`);
+    lines.push(`*${t.billTo}:* ${customer.name}`);
+    lines.push(`${t.period}: ${periodLabel}`);
     lines.push(``);
     billEntries.forEach(e => {
       lines.push(`• ${fmtDate(e.date)} — ${entryDetails(e)} — ₹${e.amount.toLocaleString("en-IN")}`);
     });
     lines.push(``);
     if (gstPct > 0) {
-      lines.push(`Sub-total: ₹${billTotal.toLocaleString("en-IN")}`);
-      lines.push(`GST (${gstPct}%): ₹${gstAmount.toLocaleString("en-IN")}`);
-      lines.push(`*Grand Total: ₹${grandTotal.toLocaleString("en-IN")}*`);
+      lines.push(`${t.subTotal}: ₹${billTotal.toLocaleString("en-IN")}`);
+      lines.push(`${t.gst} (${gstPct}%): ₹${gstAmount.toLocaleString("en-IN")}`);
+      lines.push(`*${t.grandTotal}: ₹${grandTotal.toLocaleString("en-IN")}*`);
     } else {
-      lines.push(`*Total: ₹${billTotal.toLocaleString("en-IN")}*`);
+      lines.push(`*${t.totalWork}: ₹${billTotal.toLocaleString("en-IN")}*`);
     }
     if (billMonth === "all") {
-      lines.push(`Amount Paid: ₹${totalPaid.toLocaleString("en-IN")}`);
-      lines.push(billBalance > 0 ? `*Balance Due: ₹${Math.abs(billBalance).toLocaleString("en-IN")}*` : `✅ Settled`);
+      lines.push(`${t.amountPaid}: ₹${totalPaid.toLocaleString("en-IN")}`);
+      lines.push(billBalance > 0 ? `*${t.balanceDue}: ₹${Math.abs(billBalance).toLocaleString("en-IN")}*` : `✅ ${t.settled}`);
     }
-    if (qrData) lines.push(`\nPayment: ${qrData}`);
+    if (qrData) lines.push(`\n${t.scanToPay}: ${qrData}`);
     const text = lines.join("\n");
     const phone = (customer.phone || "").replace(/\D/g, "");
     const url = phone
