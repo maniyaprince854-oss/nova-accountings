@@ -1357,6 +1357,8 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
       .bill-sum-row.balance-due { color:#c0392b; font-weight:700; }
       .bill-sum-row.balance-ok { color:#1a7a3f; font-weight:700; }
       .bill-footer { text-align:center; font-size:11px; color:#aaa; font-family:'IBM Plex Mono',monospace; padding-top:20px; border-top:1px solid #eee; }
+      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+      .bill-pay-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; background:#1a7a3f !important; color:#ffffff !important; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:700; text-decoration:none; margin-top:12px; font-family:'IBM Plex Sans',Arial,sans-serif; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.15); border:1px solid #146132; letter-spacing:0.02em; }
     </style>
     </head><body>${content}</body></html>`);
     doc.close();
@@ -1431,8 +1433,9 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"#888",fontFamily:"'IBM Plex Mono',monospace"}}>{t.scanToPay}</div>
                 <div style={{fontSize:12,color:"#555",fontFamily:"'IBM Plex Mono',monospace",wordBreak:"break-all"}}>{qrData}</div>
                 {qrData.includes("@") && billBalance > 0 && !qrImage && (
-                  <a href={`upi://pay?pa=${qrData.trim()}&pn=${encodeURIComponent(bizName)}&am=${Math.abs(billBalance).toFixed(2)}`} style={{display:"inline-block",background:"#1a7a3f",color:"#fff",padding:"8px 12px",borderRadius:4,fontSize:12,fontWeight:700,textDecoration:"none",marginTop:4,fontFamily:"'IBM Plex Sans',sans-serif",textAlign:"center"}}>
-                    Click to Pay ₹{Math.abs(billBalance).toLocaleString("en-IN",{minimumFractionDigits:2})} via UPI
+                  <a href={`upi://pay?pa=${qrData.trim()}&pn=${encodeURIComponent(bizName)}&am=${Math.abs(billBalance).toFixed(2)}`} className="bill-pay-btn" style={{WebkitPrintColorAdjust:"exact",printColorAdjust:"exact",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"8px",background:"#1a7a3f",color:"#fff",padding:"12px 24px",borderRadius:"8px",fontSize:"14px",fontWeight:700,textDecoration:"none",marginTop:"12px",fontFamily:"'IBM Plex Sans',sans-serif",textAlign:"center",border:"1px solid #146132"}}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Pay ₹{Math.abs(billBalance).toLocaleString("en-IN",{minimumFractionDigits:2})} Online
                   </a>
                 )}
               </div>
