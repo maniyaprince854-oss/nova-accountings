@@ -1289,33 +1289,55 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
   async function handleWhatsApp() {
     if (waLoading) return;
     setWaLoading(true);
+    const phone = (customer.phone || "").replace(/\D/g, "");
+    const waUrl = phone ? `https://wa.me/${phone}` : `https://web.whatsapp.com/`;
+
     try {
-      const { default: html2canvas } = await import("html2canvas");
-      const canvas = await html2canvas(billRef.current, {
+      const { default: h2c } = await import("html2canvas");
+      const el = billRef.current;
+      const canvas = await h2c(el, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: "#ffffff",
         logging: false,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
       });
-      canvas.toBlob(async (blob) => {
-        const fileName = `Invoice-${customer.name}-${billNo}.png`;
-        const file = new File([blob], fileName, { type: "image/png" });
-        const phone = (customer.phone || "").replace(/\D/g, "");
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          // Mobile: native share sheet (includes WhatsApp)
-          await navigator.share({ files: [file], title: `Invoice — ${customer.name}` });
-        } else {
-          // Desktop: download the image, then open WhatsApp
-          const url = URL.createObjectURL(blob);
+
+      const dataUrl = canvas.toDataURL("image/png");
+
+      // Try native share (mobile — opens share sheet with WhatsApp option)
+      if (typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+        canvas.toBlob(async (blob) => {
+          const file = new File([blob], `Invoice-${customer.name}.png`, { type: "image/png" });
+          if (navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file], title: `Invoice — ${customer.name}` });
+              setWaLoading(false);
+              return;
+            } catch { /* user cancelled, fall through to download */ }
+          }
+          // Download + open WhatsApp
           const a = document.createElement("a");
-          a.href = url; a.download = fileName; a.click();
-          URL.revokeObjectURL(url);
-          const waUrl = phone ? `https://wa.me/${phone}` : `https://web.whatsapp.com/`;
-          setTimeout(() => window.open(waUrl, "_blank"), 500);
-        }
+          a.href = dataUrl; a.download = `Invoice-${customer.name}-${billNo}.png`; a.click();
+          setTimeout(() => window.open(waUrl, "_blank"), 700);
+          setWaLoading(false);
+        }, "image/png");
+      } else {
+        // Desktop: auto-download image + open WhatsApp
+        const a = document.createElement("a");
+        a.href = dataUrl; a.download = `Invoice-${customer.name}-${billNo}.png`; a.click();
+        setTimeout(() => window.open(waUrl, "_blank"), 700);
         setWaLoading(false);
-      }, "image/png");
-    } catch {
+      }
+    } catch (err) {
+      // html2canvas failed entirely — just open WhatsApp
+      window.open(waUrl, "_blank");
       setWaLoading(false);
     }
   }
