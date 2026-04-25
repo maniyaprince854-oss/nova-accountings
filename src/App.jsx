@@ -1563,7 +1563,7 @@ function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicat
       <div className="page-header"><div className="page-title">Expenses</div><div className="page-sub">Business Expense Management</div></div>
 
       {/* Summary stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+      <div className="analytics-overview" style={{marginBottom:20}}>
         {[
           ["This Month",    inr(totalMonth),  "var(--red)"],
           ["This Year",     inr(totalYear),   "var(--purple)"],
@@ -1578,13 +1578,13 @@ function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicat
       </div>
 
       <div className="top-actions">
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",flex:1}}>
-          <input className="search-input" style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 13px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:13,outline:"none",minWidth:160}} placeholder="Search expenses…" value={search} onChange={e=>setSearch(e.target.value)}/>
-          <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 28px 9px 12px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:13,outline:"none",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+        <div className="expense-filter-row" style={{marginBottom:0,flex:1}}>
+          <input className="search-input" placeholder="Search expenses…" value={search} onChange={e=>setSearch(e.target.value)}/>
+          <select value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
             <option value="all">All Categories</option>
             {allCats.map(c=><option key={c} value={c}>{c}</option>)}
           </select>
-          <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:"var(--radius)",padding:"9px 28px 9px 12px",color:"var(--text)",fontFamily:"IBM Plex Sans",fontSize:13,outline:"none",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+          <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
             <option value="all">All Months</option>
             {expenseMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
           </select>
