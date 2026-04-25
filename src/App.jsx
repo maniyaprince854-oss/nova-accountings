@@ -1284,38 +1284,40 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     }, 800);
   }
 
-  function handleWhatsApp() {
-    const tr = BILL_T[lang]; // explicit fresh lookup — no stale closure
-    const lines = [];
-    lines.push(`*${bizName}*`);
-    lines.push(`${tr.invoice}: ${billNo}`);
-    lines.push(`${tr.date}: ${today}`);
-    lines.push(`---`);
-    lines.push(`*${tr.billTo}:* ${customer.name}`);
-    lines.push(`${tr.period}: ${periodLabel}`);
-    lines.push(``);
-    billEntries.forEach(e => {
-      lines.push(`• ${fmtDate(e.date)} — ${entryDetails(e)} — ₹${e.amount.toLocaleString("en-IN")}`);
-    });
-    lines.push(``);
-    if (gstPct > 0) {
-      lines.push(`${tr.subTotal}: ₹${billTotal.toLocaleString("en-IN")}`);
-      lines.push(`${tr.gst} (${gstPct}%): ₹${gstAmount.toLocaleString("en-IN")}`);
-      lines.push(`*${tr.grandTotal}: ₹${grandTotal.toLocaleString("en-IN")}*`);
-    } else {
-      lines.push(`*${tr.totalWork}: ₹${billTotal.toLocaleString("en-IN")}*`);
+  const [waLoading, setWaLoading] = useState(false);
+
+  async function handleWhatsApp() {
+    if (waLoading) return;
+    setWaLoading(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(billRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+      canvas.toBlob(async (blob) => {
+        const fileName = `Invoice-${customer.name}-${billNo}.png`;
+        const file = new File([blob], fileName, { type: "image/png" });
+        const phone = (customer.phone || "").replace(/\D/g, "");
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          // Mobile: native share sheet (includes WhatsApp)
+          await navigator.share({ files: [file], title: `Invoice — ${customer.name}` });
+        } else {
+          // Desktop: download the image, then open WhatsApp
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = fileName; a.click();
+          URL.revokeObjectURL(url);
+          const waUrl = phone ? `https://wa.me/${phone}` : `https://web.whatsapp.com/`;
+          setTimeout(() => window.open(waUrl, "_blank"), 500);
+        }
+        setWaLoading(false);
+      }, "image/png");
+    } catch {
+      setWaLoading(false);
     }
-    if (billMonth === "all") {
-      lines.push(`${tr.amountPaid}: ₹${totalPaid.toLocaleString("en-IN")}`);
-      lines.push(billBalance > 0 ? `*${tr.balanceDue}: ₹${Math.abs(billBalance).toLocaleString("en-IN")}*` : `✅ ${tr.settled}`);
-    }
-    if (qrData) lines.push(`\n${tr.scanToPay}: ${qrData}`);
-    const text = lines.join("\n");
-    const phone = (customer.phone || "").replace(/\D/g, "");
-    const url = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-      : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
   }
 
   return (
@@ -1388,9 +1390,11 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
         </div>
         <div className="bill-actions">
           <button className="btn btn-ghost" style={{flex:1,justifyContent:"center"}} onClick={onClose}>Close</button>
-          <button className="btn btn-green" style={{flex:1,justifyContent:"center"}} onClick={handleWhatsApp}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.104.544 4.076 1.495 5.786L0 24l6.387-1.474A11.944 11.944 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.659-.5-5.193-1.378l-.372-.215-3.792.875.909-3.685-.234-.389A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-            WhatsApp
+          <button className="btn btn-green" style={{flex:1,justifyContent:"center"}} onClick={handleWhatsApp} disabled={waLoading}>
+            {waLoading
+              ? <span style={{fontSize:12}}>Generating…</span>
+              : <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.104.544 4.076 1.495 5.786L0 24l6.387-1.474A11.944 11.944 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.891 0-3.659-.5-5.193-1.378l-.372-.215-3.792.875.909-3.685-.234-.389A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> WhatsApp</>
+            }
           </button>
           <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={handlePrint}><Icon name="print" size={14}/> Print / Save PDF</button>
         </div>
