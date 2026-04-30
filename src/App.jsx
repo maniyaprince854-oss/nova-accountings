@@ -1503,7 +1503,7 @@ function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicat
     `).join("");
 
     const html = `
-      <div style="font-family:'-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif'; background:#fff; color:#1f2937; width:700px; padding:30px; position:relative;">
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#fff; color:#1f2937; width:700px; padding:30px; position:relative;">
         <div style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);"></div>
         <div style="border-bottom:1px solid #e5e7eb; padding-bottom:24px; margin-bottom:36px; display:flex; justify-content:space-between; align-items:flex-start; padding-top:10px;">
           <div><div style="font-size:28px; font-weight:800; color:#111827; letter-spacing:-0.03em;">${bizName}</div><div style="font-size:11px; color:#6b7280; letter-spacing:0.15em; text-transform:uppercase; margin-top:6px; font-family:monospace;">${bizSub}</div></div>
