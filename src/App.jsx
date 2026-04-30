@@ -1375,38 +1375,23 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
       </div>
     `;
 
-    // Probe: detect UPI link + measure its vertical position in the rendered layout.
-    // The probe is removed before passing anything to html2pdf so html2canvas
-    // captures cleanly via its own DOM insertion.
-    let upiAnnotation = null;
-    const probe = document.createElement('div');
-    probe.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;visibility:hidden;';
-    probe.innerHTML = innerHtml;
-    document.body.appendChild(probe);
-    const upiEl = probe.querySelector('a[href^="upi://"]');
-    if (upiEl) {
-      const iRect = probe.firstElementChild.getBoundingClientRect();
-      // Use the entire payment-section row (QR + button parent) for a large tap target
-      const section = upiEl.parentElement?.parentElement || upiEl;
-      const sRect   = section.getBoundingClientRect();
-      const margin  = 0.3, printW = 7.67, printH = 11.09, scale = printW / 700;
-      const oY      = (sRect.top - iRect.top) * scale;
-      upiAnnotation = {
-        href: upiEl.getAttribute('href'),
-        // Full page width so any tap on that row opens the link
-        x:    margin,
-        y:    margin + (oY % printH) - 0.05,
-        w:    printW,
-        h:    Math.max(sRect.height * scale, 0.5) + 0.1,
-        page: Math.floor(oY / printH) + 1,
-      };
-    }
-    document.body.removeChild(probe);
+    // Extract UPI href directly from the captured innerHTML string — no DOM probe
+    // needed, avoids <style> tags leaking into the live document.
+    let upiHref = null;
+    const upiMatch = content.match(/href="(upi:\/\/[^"]+)"/);
+    if (upiMatch) upiHref = upiMatch[1].replace(/&amp;/g, '&');
 
-    // Render wrapper — must NOT be pre-inserted into the DOM;
-    // html2pdf appends it internally so html2canvas captures it correctly.
+    // Hide the rasterized HTML pay button so we can replace it with a native
+    // jsPDF-drawn button whose coordinates are exactly known — this is the only
+    // reliable way to place a clickable PDF annotation on Android viewers.
+    const pdfHtml = innerHtml.replace(
+      '</style>',
+      '.bill-pay-btn { display:none !important; }</style>'
+    );
+
+    // Render wrapper — kept out of the DOM so html2pdf inserts it cleanly.
     const wrapper = document.createElement('div');
-    wrapper.innerHTML = innerHtml;
+    wrapper.innerHTML = pdfHtml;
 
     const opt = {
       margin:       0.3,
@@ -1417,10 +1402,33 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     };
 
     html2pdf().from(wrapper).set(opt).toPdf().get('pdf').then(function(pdf) {
-      if (upiAnnotation) {
-        pdf.setPage(upiAnnotation.page);
-        pdf.link(upiAnnotation.x, upiAnnotation.y, upiAnnotation.w, upiAnnotation.h, { url: upiAnnotation.href });
+      if (upiHref) {
+        // Draw a native jsPDF button on the last page at exact, known coordinates.
+        // Because we place the annotation over a shape WE drew (not a rasterized
+        // image), there is zero coordinate guessing — it will always be tappable.
+        const nPages = pdf.internal.getNumberOfPages();
+        pdf.setPage(nPages);
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+
+        const btnW = 2.8, btnH = 0.4;
+        const btnX = (pageW - btnW) / 2;
+        const btnY = pageH - 1.0; // 1 inch from page bottom, always in empty space
+
+        // Green rounded rectangle
+        pdf.setFillColor(26, 122, 63);
+        pdf.roundedRect(btnX, btnY, btnW, btnH, 0.05, 0.05, 'F');
+
+        // White label
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.text('Pay via UPI', pageW / 2, btnY + 0.26, { align: 'center' });
+
+        // Link annotation placed at exactly the same rect as the drawn button
+        pdf.link(btnX, btnY, btnW, btnH, { url: upiHref });
       }
+
       const blob  = pdf.output('blob');
       const dlUrl = URL.createObjectURL(blob);
       const a     = document.createElement('a');
