@@ -1342,15 +1342,15 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     const opt = {
       margin:       0.3,
       filename:     `${billNo}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
+      image:        { type: 'jpeg', quality: 1 },
+      html2canvas:  { scale: 2, useCORS: true, windowWidth: 700 },
       jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
 
     const wrapper = document.createElement('div');
     wrapper.style.padding = '0';
     wrapper.innerHTML = `
-      <div style="font-family: ${lang==='gu'?"'Noto Sans Gujarati','IBM Plex Sans'":"'IBM Plex Sans'"}, Arial, sans-serif; background: #fff; color: #111; width: 800px; padding: 20px;">
+      <div style="font-family: ${lang==='gu'?"'Noto Sans Gujarati','IBM Plex Sans'":"'IBM Plex Sans'"}, Arial, sans-serif; background: #fff; color: #111; width: 700px; padding: 20px;">
         <style>
           .bill-page { background:#fff; color:#111; padding:0; }
           .bill-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px; padding-bottom:20px; border-bottom:2px solid #111; }
@@ -1502,7 +1502,7 @@ function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicat
     `).join("");
 
     const html = `
-      <div style="font-family:'IBM Plex Sans',Arial,sans-serif; background:#fff; color:#111; width:800px; padding:20px;">
+      <div style="font-family:'IBM Plex Sans',Arial,sans-serif; background:#fff; color:#111; width:700px; padding:20px;">
         <div style="border-bottom:2px solid #111; padding-bottom:16px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-start;">
           <div><div style="font-size:22px; font-weight:800; letter-spacing:-0.02em;">${bizName}</div><div style="font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace;">${bizSub}</div></div>
           <div style="text-align:right;"><div style="font-size:20px; font-weight:700;">Expense Report</div><div style="font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px;">${label}</div><div style="font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px;">Generated: ${today}</div></div>
@@ -1532,8 +1532,8 @@ function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicat
     const opt = {
       margin:       0.3,
       filename:     `Expense_Report_${filterMonth==='all'?'All':filterMonth}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
+      image:        { type: 'jpeg', quality: 1 },
+      html2canvas:  { scale: 2, useCORS: true, windowWidth: 700 },
       jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
 
