@@ -1313,7 +1313,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     
     let finalQrStr = qrData.trim();
     if (finalQrStr.includes("@") && !finalQrStr.startsWith("upi://")) {
-      finalQrStr = `upi://pay?pa=${finalQrStr}&pn=${encodeURIComponent(bizName)}`;
+      finalQrStr = `upi://pay?pa=${finalQrStr}&pn=${encodeURIComponent(bizName)}&cu=INR`;
       if (billBalance > 0) finalQrStr += `&am=${Math.abs(billBalance).toFixed(2)}`;
     }
 
@@ -1379,7 +1379,15 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     // needed, avoids <style> tags leaking into the live document.
     let upiHref = null;
     const upiMatch = content.match(/href="(upi:\/\/[^"]+)"/);
-    if (upiMatch) upiHref = upiMatch[1].replace(/&amp;/g, '&');
+    if (upiMatch) {
+      upiHref = upiMatch[1].replace(/&amp;/g, '&');
+      // Ensure cu=INR is present (required by NPCI UPI spec)
+      if (!upiHref.includes('cu=')) upiHref += '&cu=INR';
+      // Convert upi:// to Android intent URL so Chrome routes it to UPI apps
+      // instead of trying to load it as a web URL.
+      const upiPath = upiHref.replace(/^upi:\/\//, '');
+      upiHref = `intent://${upiPath}#Intent;scheme=upi;action=android.intent.action.VIEW;category=android.intent.category.DEFAULT;end`;
+    }
 
     // Hide the rasterized HTML pay button so we can replace it with a native
     // jsPDF-drawn button whose coordinates are exactly known — this is the only
@@ -1504,7 +1512,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"#888",fontFamily:"'IBM Plex Mono',monospace"}}>{t.scanToPay}</div>
                 <div style={{fontSize:12,color:"#555",fontFamily:"'IBM Plex Mono',monospace",wordBreak:"break-all"}}>{qrData}</div>
                 {qrData.includes("@") && billBalance > 0 && !qrImage && (
-                  <a href={`upi://pay?pa=${qrData.trim()}&pn=${encodeURIComponent(bizName)}&am=${Math.abs(billBalance).toFixed(2)}`} className="bill-pay-btn" style={{WebkitPrintColorAdjust:"exact",printColorAdjust:"exact",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"8px",background:"#1a7a3f",color:"#fff",padding:"12px 24px",borderRadius:"8px",fontSize:"14px",fontWeight:700,textDecoration:"none",marginTop:"12px",fontFamily:"'IBM Plex Sans',sans-serif",textAlign:"center",border:"1px solid #146132"}}>
+                  <a href={`upi://pay?pa=${qrData.trim()}&pn=${encodeURIComponent(bizName)}&am=${Math.abs(billBalance).toFixed(2)}&cu=INR`} className="bill-pay-btn" style={{WebkitPrintColorAdjust:"exact",printColorAdjust:"exact",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"8px",background:"#1a7a3f",color:"#fff",padding:"12px 24px",borderRadius:"8px",fontSize:"14px",fontWeight:700,textDecoration:"none",marginTop:"12px",fontFamily:"'IBM Plex Sans',sans-serif",textAlign:"center",border:"1px solid #146132"}}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                     Pay ₹{Math.abs(billBalance).toLocaleString("en-IN",{minimumFractionDigits:2})} Online
                   </a>
