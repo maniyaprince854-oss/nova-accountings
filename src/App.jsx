@@ -1342,17 +1342,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     const rawName = (settings?.pdfFilename || "").trim();
     const filename = rawName ? rawName.replace(/\.pdf$/i, "") : "invoice";
 
-    const opt = {
-      margin:       0.3,
-      filename:     `${filename}.pdf`,
-      image:        { type: 'jpeg', quality: 1 },
-      html2canvas:  { scale: 2, useCORS: true, windowWidth: 700 },
-      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
-    };
-
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:fixed;top:-9999px;left:0;width:700px;';
-    wrapper.innerHTML = `
+    const innerHtml = `
       <div style="font-family: ${lang==='gu'?"'Noto Sans Gujarati', sans-serif":"-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"}; background: #fff; color: #1f2937; width: 700px; padding: 30px; position: relative;">
         <div style="position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #f0a500 0%, #fcd34d 100%);"></div>
         <style>
@@ -1379,52 +1369,59 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
           .bill-sum-row.paid { color:#059669; }
           .bill-sum-row.balance-due { color:#dc2626; font-weight:700; font-size:15px; }
           .bill-sum-row.balance-ok { color:#059669; font-weight:700; font-size:15px; }
-          .bill-footer { text-align:center; font-size:12px; color:#9ca3af; padding-top:24px; border-top:1px solid #e5e7eb;  }
+          .bill-footer { text-align:center; font-size:12px; color:#9ca3af; padding-top:24px; border-top:1px solid #e5e7eb; }
         </style>
         ${content}
       </div>
     `;
-    document.body.appendChild(wrapper);
 
-    // Measure UPI link position so we can add a real clickable annotation
-    const upiLink = wrapper.querySelector('a[href^="upi://"]');
+    // Use a hidden off-screen probe just for measuring the UPI link position,
+    // then remove it — the actual render wrapper must NOT be in the DOM so
+    // html2canvas can capture it correctly via html2pdf's own DOM insertion.
     let linkAnnotation = null;
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;visibility:hidden;';
+    probe.innerHTML = innerHtml;
+    document.body.appendChild(probe);
+    const upiLink = probe.querySelector('a[href^="upi://"]');
     if (upiLink) {
-      const innerDiv = wrapper.firstElementChild;
-      const innerRect = innerDiv.getBoundingClientRect();
-      const linkRect  = upiLink.getBoundingClientRect();
-      const margin    = 0.3;
-      const printW    = 8.27 - 2 * margin; // 7.67in
-      const printH    = 11.69 - 2 * margin; // 11.09in
-      const scale     = printW / 700;
-      const offsetX   = (linkRect.left - innerRect.left) * scale;
-      const offsetY   = (linkRect.top  - innerRect.top)  * scale;
-      const pageNum   = Math.floor(offsetY / printH) + 1;
-      linkAnnotation  = {
+      const iRect = probe.firstElementChild.getBoundingClientRect();
+      const lRect = upiLink.getBoundingClientRect();
+      const margin = 0.3, printW = 7.67, printH = 11.09, scale = printW / 700;
+      const oY = (lRect.top - iRect.top) * scale;
+      linkAnnotation = {
         href: upiLink.getAttribute('href'),
-        x:    margin + offsetX,
-        y:    margin + (offsetY % printH),
-        w:    linkRect.width  * scale,
-        h:    linkRect.height * scale,
-        page: pageNum,
+        x:    margin + (lRect.left - iRect.left) * scale,
+        y:    margin + (oY % printH),
+        w:    lRect.width  * scale,
+        h:    lRect.height * scale,
+        page: Math.floor(oY / printH) + 1,
       };
     }
+    document.body.removeChild(probe);
 
-    html2pdf().set(opt).from(wrapper).toPdf().get('pdf').then(function(pdf) {
-      if (linkAnnotation) {
-        pdf.setPage(linkAnnotation.page);
-        pdf.link(linkAnnotation.x, linkAnnotation.y, linkAnnotation.w, linkAnnotation.h, { url: linkAnnotation.href });
-      }
-      const blob = pdf.output('blob');
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${filename}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(a.href);
-      document.body.removeChild(a);
-      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-    });
+    // Render wrapper — kept out of the DOM so html2pdf inserts it cleanly
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = innerHtml;
+
+    const opt = {
+      margin:       0.3,
+      filename:     `${filename}.pdf`,
+      image:        { type: 'jpeg', quality: 1 },
+      html2canvas:  { scale: 2, useCORS: true, windowWidth: 700 },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
+    if (linkAnnotation) {
+      const ann = linkAnnotation;
+      html2pdf().set(opt).from(wrapper).toPdf().get('pdf').then(function(pdf) {
+        pdf.setPage(ann.page);
+        pdf.link(ann.x, ann.y, ann.w, ann.h, { url: ann.href });
+        pdf.save(`${filename}.pdf`);
+      });
+    } else {
+      html2pdf().from(wrapper).set(opt).save();
+    }
   }
 
   return (
