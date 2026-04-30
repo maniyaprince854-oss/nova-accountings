@@ -1375,32 +1375,36 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
       </div>
     `;
 
-    // Use a hidden off-screen probe just for measuring the UPI link position,
-    // then remove it — the actual render wrapper must NOT be in the DOM so
-    // html2canvas can capture it correctly via html2pdf's own DOM insertion.
-    let linkAnnotation = null;
+    // Probe: detect UPI link + measure its vertical position in the rendered layout.
+    // The probe is removed before passing anything to html2pdf so html2canvas
+    // captures cleanly via its own DOM insertion.
+    let upiAnnotation = null;
     const probe = document.createElement('div');
     probe.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;visibility:hidden;';
     probe.innerHTML = innerHtml;
     document.body.appendChild(probe);
-    const upiLink = probe.querySelector('a[href^="upi://"]');
-    if (upiLink) {
+    const upiEl = probe.querySelector('a[href^="upi://"]');
+    if (upiEl) {
       const iRect = probe.firstElementChild.getBoundingClientRect();
-      const lRect = upiLink.getBoundingClientRect();
-      const margin = 0.3, printW = 7.67, printH = 11.09, scale = printW / 700;
-      const oY = (lRect.top - iRect.top) * scale;
-      linkAnnotation = {
-        href: upiLink.getAttribute('href'),
-        x:    margin + (lRect.left - iRect.left) * scale,
-        y:    margin + (oY % printH),
-        w:    lRect.width  * scale,
-        h:    lRect.height * scale,
+      // Use the entire payment-section row (QR + button parent) for a large tap target
+      const section = upiEl.parentElement?.parentElement || upiEl;
+      const sRect   = section.getBoundingClientRect();
+      const margin  = 0.3, printW = 7.67, printH = 11.09, scale = printW / 700;
+      const oY      = (sRect.top - iRect.top) * scale;
+      upiAnnotation = {
+        href: upiEl.getAttribute('href'),
+        // Full page width so any tap on that row opens the link
+        x:    margin,
+        y:    margin + (oY % printH) - 0.05,
+        w:    printW,
+        h:    Math.max(sRect.height * scale, 0.5) + 0.1,
         page: Math.floor(oY / printH) + 1,
       };
     }
     document.body.removeChild(probe);
 
-    // Render wrapper — kept out of the DOM so html2pdf inserts it cleanly
+    // Render wrapper — must NOT be pre-inserted into the DOM;
+    // html2pdf appends it internally so html2canvas captures it correctly.
     const wrapper = document.createElement('div');
     wrapper.innerHTML = innerHtml;
 
@@ -1412,16 +1416,20 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
       jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
 
-    if (linkAnnotation) {
-      const ann = linkAnnotation;
-      html2pdf().set(opt).from(wrapper).toPdf().get('pdf').then(function(pdf) {
-        pdf.setPage(ann.page);
-        pdf.link(ann.x, ann.y, ann.w, ann.h, { url: ann.href });
-        pdf.save(`${filename}.pdf`);
-      });
-    } else {
-      html2pdf().from(wrapper).set(opt).save();
-    }
+    html2pdf().from(wrapper).set(opt).toPdf().get('pdf').then(function(pdf) {
+      if (upiAnnotation) {
+        pdf.setPage(upiAnnotation.page);
+        pdf.link(upiAnnotation.x, upiAnnotation.y, upiAnnotation.w, upiAnnotation.h, { url: upiAnnotation.href });
+      }
+      const blob  = pdf.output('blob');
+      const dlUrl = URL.createObjectURL(blob);
+      const a     = document.createElement('a');
+      a.href     = dlUrl;
+      a.download = `${filename}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(dlUrl); document.body.removeChild(a); }, 100);
+    });
   }
 
   return (
