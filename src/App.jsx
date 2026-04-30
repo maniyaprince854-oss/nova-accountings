@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import QRCode from "qrcode";
+import html2pdf from "html2pdf.js";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 const STORAGE_KEYS = { customers: "nova_customers_v3", settings: "nova_settings_v3", expenses: "nova_expenses_v3" };
@@ -1336,54 +1337,52 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
     return `${e.workType}`;
   }
 
-  function handlePrint() {
+  function handleDownloadPDF() {
     const content = billRef.current.innerHTML;
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:-9999px;top:0;width:700px;height:900px;border:0;";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    doc.open();
-    doc.write(`<!DOCTYPE html><html><head><title>Invoice - ${customer.name}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&family=Noto+Sans+Gujarati:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-      @page { margin: 18mm 16mm; }
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: ${lang==="gu"?"'Noto Sans Gujarati','IBM Plex Sans'":"'IBM Plex Sans'"}, Arial, sans-serif; background: #fff; color: #111; }
-      .bill-page { background:#fff; color:#111; padding:0; }
-      .bill-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px; padding-bottom:20px; border-bottom:2px solid #111; }
-      .bill-brand-name { font-size:22px; font-weight:800; color:#111; letter-spacing:-0.02em; }
-      .bill-brand-sub { font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
-      .bill-meta { text-align:right; }
-      .bill-meta-title { font-size:20px; font-weight:700; color:#111; }
-      .bill-meta-detail { font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
-      .bill-to-label { font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#888; font-family:'IBM Plex Mono',monospace; margin-bottom:4px; }
-      .bill-to-name { font-size:18px; font-weight:700; color:#111; }
-      .bill-to-period { font-size:13px; color:#555; font-family:'IBM Plex Mono',monospace; margin-top:2px; margin-bottom:24px; }
-      .bill-table-scroll { overflow:visible; }
-      .bill-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
-      .bill-table th { padding:8px 10px; background:#f5f5f5; border-bottom:1px solid #ddd; font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#555; text-align:left; font-family:'IBM Plex Mono',monospace; }
-      .bill-table td { padding:9px 10px; border-bottom:1px solid #eee; font-size:12px; color:#222; vertical-align:middle; }
-      .bill-table tr:last-child td { border-bottom:none; }
-      .bill-table .amt { font-family:'IBM Plex Mono',monospace; font-weight:600; text-align:right; }
-      .bill-table .num { font-family:'IBM Plex Mono',monospace; text-align:right; }
-      .bill-summary { margin-left:auto; width:220px; margin-bottom:24px; }
-      .bill-sum-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; color:#444; border-bottom:1px solid #eee; font-family:'IBM Plex Mono',monospace; }
-      .bill-sum-row.total { font-size:16px; font-weight:700; color:#111; border-bottom:2px solid #111; border-top:2px solid #111; padding:8px 0; margin-top:4px; }
-      .bill-sum-row.paid { color:#1a7a3f; }
-      .bill-sum-row.balance-due { color:#c0392b; font-weight:700; }
-      .bill-sum-row.balance-ok { color:#1a7a3f; font-weight:700; }
-      .bill-footer { text-align:center; font-size:11px; color:#aaa; font-family:'IBM Plex Mono',monospace; padding-top:20px; border-top:1px solid #eee; }
-      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
-      .bill-pay-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; background:#1a7a3f !important; color:#ffffff !important; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:700; text-decoration:none; margin-top:12px; font-family:'IBM Plex Sans',Arial,sans-serif; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.15); border:1px solid #146132; letter-spacing:0.02em; }
-    </style>
-    </head><body>${content}</body></html>`);
-    doc.close();
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
-    }, 800);
+    const opt = {
+      margin:       0.3,
+      filename:     `${billNo}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
+    const wrapper = document.createElement('div');
+    wrapper.style.padding = '0';
+    wrapper.innerHTML = `
+      <div style="font-family: ${lang==='gu'?"'Noto Sans Gujarati','IBM Plex Sans'":"'IBM Plex Sans'"}, Arial, sans-serif; background: #fff; color: #111; width: 800px; padding: 20px;">
+        <style>
+          .bill-page { background:#fff; color:#111; padding:0; }
+          .bill-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px; padding-bottom:20px; border-bottom:2px solid #111; }
+          .bill-brand-name { font-size:22px; font-weight:800; color:#111; letter-spacing:-0.02em; }
+          .bill-brand-sub { font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+          .bill-meta { text-align:right; }
+          .bill-meta-title { font-size:20px; font-weight:700; color:#111; }
+          .bill-meta-detail { font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
+          .bill-to-label { font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#888; font-family:'IBM Plex Mono',monospace; margin-bottom:4px; }
+          .bill-to-name { font-size:18px; font-weight:700; color:#111; }
+          .bill-to-period { font-size:13px; color:#555; font-family:'IBM Plex Mono',monospace; margin-top:2px; margin-bottom:24px; }
+          .bill-table-scroll { overflow:visible; }
+          .bill-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+          .bill-table th { padding:8px 10px; background:#f5f5f5; border-bottom:1px solid #ddd; font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:#555; text-align:left; font-family:'IBM Plex Mono',monospace; }
+          .bill-table td { padding:9px 10px; border-bottom:1px solid #eee; font-size:12px; color:#222; vertical-align:middle; }
+          .bill-table tr:last-child td { border-bottom:none; }
+          .bill-table .amt { font-family:'IBM Plex Mono',monospace; font-weight:600; text-align:right; }
+          .bill-table .num { font-family:'IBM Plex Mono',monospace; text-align:right; }
+          .bill-summary { margin-left:auto; width:220px; margin-bottom:24px; }
+          .bill-sum-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; color:#444; border-bottom:1px solid #eee; font-family:'IBM Plex Mono',monospace; }
+          .bill-sum-row.total { font-size:16px; font-weight:700; color:#111; border-bottom:2px solid #111; border-top:2px solid #111; padding:8px 0; margin-top:4px; }
+          .bill-sum-row.paid { color:#1a7a3f; }
+          .bill-sum-row.balance-due { color:#c0392b; font-weight:700; }
+          .bill-sum-row.balance-ok { color:#1a7a3f; font-weight:700; }
+          .bill-footer { text-align:center; font-size:11px; color:#aaa; font-family:'IBM Plex Mono',monospace; padding-top:20px; border-top:1px solid #eee; }
+          .bill-pay-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; background:#1a7a3f !important; color:#ffffff !important; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:700; text-decoration:none; margin-top:12px; font-family:'IBM Plex Sans',Arial,sans-serif; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.15); border:1px solid #146132; letter-spacing:0.02em; }
+        </style>
+        ${content}
+      </div>
+    `;
+
+    html2pdf().from(wrapper).set(opt).save();
   }
 
   return (
@@ -1462,7 +1461,7 @@ function BillModal({ customer, settings, billMonth, setBillMonth, totalPaid, bal
         </div>
         <div className="bill-actions">
           <button className="btn btn-ghost" style={{flex:1,justifyContent:"center"}} onClick={onClose}>Close</button>
-          <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={handlePrint}><Icon name="print" size={14}/> Print / Save PDF</button>
+          <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={handleDownloadPDF}><Icon name="download" size={14}/> Download PDF</button>
         </div>
       </div>
     </div>
@@ -1502,55 +1501,46 @@ function ExpensesPage({ expenses, totalPaid, settings, onAdd, onEdit, onDuplicat
       </tr>
     `).join("");
 
-    const html = `<!DOCTYPE html><html><head><title>Expense Report - ${bizName}</title>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-      @page { margin:18mm 16mm; }
-      body { font-family:'IBM Plex Sans',Arial,sans-serif; background:#fff; color:#111; margin:0; }
-      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
-      .header { border-bottom:2px solid #111; padding-bottom:16px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-start; }
-      .biz-name { font-size:22px; font-weight:800; letter-spacing:-0.02em; }
-      .biz-sub { font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
-      .report-meta { text-align:right; }
-      .report-title { font-size:20px; font-weight:700; }
-      .report-detail { font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
-    </style></head><body>
-      <div class="header">
-        <div><div class="biz-name">${bizName}</div><div class="biz-sub">${bizSub}</div></div>
-        <div class="report-meta"><div class="report-title">Expense Report</div><div class="report-detail">${label}</div><div class="report-detail">Generated: ${today}</div></div>
-      </div>
-      
-      <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:13px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:0.05em;">Total Expenses Listed</span>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:#c0392b;">₹${totalFiltered.toLocaleString("en-IN",{minimumFractionDigits:2})}</span>
-      </div>
+    const html = `
+      <div style="font-family:'IBM Plex Sans',Arial,sans-serif; background:#fff; color:#111; width:800px; padding:20px;">
+        <div style="border-bottom:2px solid #111; padding-bottom:16px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-start;">
+          <div><div style="font-size:22px; font-weight:800; letter-spacing:-0.02em;">${bizName}</div><div style="font-size:11px; color:#666; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; font-family:'IBM Plex Mono',monospace;">${bizSub}</div></div>
+          <div style="text-align:right;"><div style="font-size:20px; font-weight:700;">Expense Report</div><div style="font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px;">${label}</div><div style="font-size:12px; color:#666; font-family:'IBM Plex Mono',monospace; margin-top:4px;">Generated: ${today}</div></div>
+        </div>
+        
+        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:0.05em;">Total Expenses Listed</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:#c0392b;">₹${totalFiltered.toLocaleString("en-IN",{minimumFractionDigits:2})}</span>
+        </div>
 
-      ${filtered.length===0 ? '<div style="text-align:center;color:#888;padding:40px;font-size:14px;">No expenses found for this period.</div>' : `
-      <table style="width:100%;border-collapse:collapse;border:1px solid #eee;">
-        <thead>
-          <tr>
-            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Date</th>
-            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Title</th>
-            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Category</th>
-            <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Description</th>
-            <th style="background:#f5f5f5;padding:10px 14px;text-align:right;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`}
-      <div style="text-align:center;font-size:10px;color:#aaa;margin-top:24px;font-family:'IBM Plex Mono',monospace;">Generated by Nova Accountings</div>
-    </body></html>`;
+        ${filtered.length===0 ? '<div style="text-align:center;color:#888;padding:40px;font-size:14px;">No expenses found for this period.</div>' : `
+        <table style="width:100%;border-collapse:collapse;border:1px solid #eee;">
+          <thead>
+            <tr>
+              <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Date</th>
+              <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Title</th>
+              <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Category</th>
+              <th style="background:#f5f5f5;padding:10px 14px;text-align:left;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Description</th>
+              <th style="background:#f5f5f5;padding:10px 14px;text-align:right;font-size:10px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:#555;border-bottom:2px solid #ddd;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`}
+        <div style="text-align:center;font-size:10px;color:#aaa;margin-top:24px;font-family:'IBM Plex Mono',monospace;">Generated by Nova Accountings</div>
+      </div>`;
 
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:-9999px;top:0;width:800px;height:1000px;border:0;";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    doc.open(); doc.write(html); doc.close();
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
-    }, 800);
+    const opt = {
+      margin:       0.3,
+      filename:     `Expense_Report_${filterMonth==='all'?'All':filterMonth}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
+    const wrapper = document.createElement('div');
+    wrapper.style.padding = '0';
+    wrapper.innerHTML = html;
+    html2pdf().from(wrapper).set(opt).save();
   }
 
   const totalAll    = expenses.reduce((s,e)=>s+e.amount,0);
